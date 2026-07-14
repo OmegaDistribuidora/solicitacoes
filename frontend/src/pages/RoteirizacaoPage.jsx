@@ -778,7 +778,7 @@ export default function RoteirizacaoPage() {
         <td>
           {request.items?.map((item) => (
             <div key={item.id} className="muted small">
-              {item.codusur} - {item.rca} / {item.codcli}: {item.currentDia ? `${item.currentDia} -> ` : ""}
+              {item.codusur} - {item.rca} / {item.codcli}: {item.currentDia ? `${item.currentDia} / ${item.currentTipo} -> ` : ""}
               {item.requestedDia} / {item.requestedTipo}
             </div>
           ))}
