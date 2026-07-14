@@ -171,7 +171,7 @@ function CheckboxDropdown({ label, values, options, onChange }) {
   );
 }
 
-function ActionDialog({ title, children, confirmLabel, danger, saving, onCancel, onConfirm, wide }) {
+function ActionDialog({ title, children, confirmLabel, danger, saving, confirmDisabled, onCancel, onConfirm, wide }) {
   return (
     <div className="modal-backdrop modal-backdrop-nested" role="presentation" onClick={onCancel}>
       <section
@@ -191,7 +191,7 @@ function ActionDialog({ title, children, confirmLabel, danger, saving, onCancel,
         </div>
         <div className="dialog-body">{children}</div>
         <div className="modal-actions">
-          <button type="button" className={danger ? "danger-btn" : "primary-btn"} onClick={onConfirm} disabled={saving}>
+          <button type="button" className={danger ? "danger-btn" : "primary-btn"} onClick={onConfirm} disabled={saving || confirmDisabled}>
             {saving ? "Processando..." : confirmLabel}
           </button>
           <button type="button" className="secondary-btn" onClick={onCancel} disabled={saving}>
@@ -476,43 +476,50 @@ function RequestModal({ initialMode, token, rcas, onClose, onCreated }) {
 }
 
 function ImportPreviewDialog({ preview, saving, onCancel, onConfirm }) {
+  const hasChanges = Boolean(preview.rows?.length);
+
   return (
-    <ActionDialog title="Pré-visualização da importação" confirmLabel="Criar solicitações" saving={saving} onCancel={onCancel} onConfirm={onConfirm} wide>
+    <ActionDialog title="Pré-visualização da importação" confirmLabel="Criar solicitações" saving={saving} confirmDisabled={!hasChanges} onCancel={onCancel} onConfirm={onConfirm} wide>
       <div className="section-header">
         <p className="muted">
-          {preview.summary.additions} inclusões, {preview.summary.updates} modificações, {preview.summary.total} linha(s).
+          {preview.summary.additions} inclusões, {preview.summary.updates} modificações, {preview.summary.total} ajuste(s).
+          {preview.summary.unchanged ? ` ${preview.summary.unchanged} linha(s) sem mudança foram ocultadas.` : ""}
         </p>
       </div>
-      <div className="table-wrap preview-dialog-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Ação</th>
-              <th>Vendedor</th>
-              <th>Cliente</th>
-              <th>De</th>
-              <th>Para</th>
-            </tr>
-          </thead>
-          <tbody>
-            {preview.rows.slice(0, 200).map((row, index) => (
-              <tr className={row.action === "ADD" ? "preview-row-add" : "preview-row-update"} key={`${row.codusur}-${row.codcli}-${index}`}>
-                <td>{row.action === "ADD" ? "Inclusão" : "Modificação"}</td>
-                <td>
-                  {row.codusur} - {row.rca}
-                </td>
-                <td>
-                  {row.codcli} - {row.cliente}
-                </td>
-                <td>{row.currentDia ? `${row.currentDia} / ${row.currentTipo}` : "-"}</td>
-                <td>
-                  {row.dia} / {row.tipo}
-                </td>
+      {hasChanges ? (
+        <div className="table-wrap preview-dialog-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Ação</th>
+                <th>Vendedor</th>
+                <th>Cliente</th>
+                <th>De</th>
+                <th>Para</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {preview.rows.slice(0, 200).map((row, index) => (
+                <tr className={row.action === "ADD" ? "preview-row-add" : "preview-row-update"} key={`${row.codusur}-${row.codcli}-${index}`}>
+                  <td>{row.action === "ADD" ? "Inclusão" : "Modificação"}</td>
+                  <td>
+                    {row.codusur} - {row.rca}
+                  </td>
+                  <td>
+                    {row.codcli} - {row.cliente}
+                  </td>
+                  <td>{row.currentDia ? `${row.currentDia} / ${row.currentTipo}` : "-"}</td>
+                  <td>
+                    {row.dia} / {row.tipo}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state">Nenhuma inclusão ou modificação encontrada nesta planilha.</div>
+      )}
     </ActionDialog>
   );
 }

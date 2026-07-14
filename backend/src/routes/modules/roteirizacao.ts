@@ -315,6 +315,7 @@ export async function registerRoteirizacaoRoutes(app: FastifyInstance): Promise<
     try {
       const rows = readRoutingWorkbook(tempPath);
       const preview = [];
+      let unchanged = 0;
       for (const row of rows) {
         const rca = await prisma.baseRca.findUnique({ where: { codusur: row.codusur } });
         if (!rca) {
@@ -330,6 +331,12 @@ export async function registerRoteirizacaoRoutes(app: FastifyInstance): Promise<
         const current = await prisma.routingEntry.findUnique({
           where: { codusur_codcli: { codusur: row.codusur, codcli: row.codcli } }
         });
+
+        if (current && current.dia === row.dia && current.tipo === row.tipo) {
+          unchanged += 1;
+          continue;
+        }
+
         preview.push({
           ...row,
           codgerente: rca.codgerente,
@@ -343,7 +350,15 @@ export async function registerRoteirizacaoRoutes(app: FastifyInstance): Promise<
           currentCliente: current?.cliente || null
         });
       }
-      return { rows: preview, summary: { total: preview.length, additions: preview.filter((row) => row.action === "ADD").length, updates: preview.filter((row) => row.action === "UPDATE").length } };
+      return {
+        rows: preview,
+        summary: {
+          total: preview.length,
+          additions: preview.filter((row) => row.action === "ADD").length,
+          updates: preview.filter((row) => row.action === "UPDATE").length,
+          unchanged
+        }
+      };
     } catch (error) {
       return reply.code(400).send({ message: error instanceof Error ? error.message : "Falha ao ler planilha." });
     } finally {

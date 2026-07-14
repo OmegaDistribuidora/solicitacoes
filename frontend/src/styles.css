@@ -732,11 +732,11 @@ p {
 }
 
 .preview-row-add td {
-  background: rgba(55, 209, 138, 0.12);
+  background: rgba(55, 209, 138, 0.22);
 }
 
 .preview-row-update td {
-  background: rgba(255, 190, 92, 0.13);
+  background: rgba(255, 204, 92, 0.24);
 }
 
 .status-with-reason {
