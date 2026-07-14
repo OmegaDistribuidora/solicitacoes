@@ -6,7 +6,7 @@
     "postinstall": "prisma generate",
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
-    "start": "prisma db push --skip-generate && node dist/server.js",
+    "start": "node scripts/ensure-build.cjs && prisma db push --skip-generate && node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "import:routing": "tsx scripts/import-routing-from-excel.ts",
@@ -23,13 +23,13 @@
     "pg": "^8.13.3",
     "prisma": "^6.6.0",
     "xlsx": "^0.18.5",
-    "zod": "^3.24.2"
-  },
-  "devDependencies": {
+    "zod": "^3.24.2",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^22.13.10",
     "@types/pg": "^8.11.11",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2"
+  },
+  "devDependencies": {
   }
 }
