@@ -619,6 +619,25 @@ p {
   margin: 0;
 }
 
+.table-wrap.is-refreshing {
+  position: relative;
+}
+
+.table-refresh-indicator {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  width: fit-content;
+  margin: 0 0 10px auto;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 196, 143, 0.32);
+  border-radius: 999px;
+  background: rgba(255, 123, 44, 0.14);
+  color: #ffe1c9;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
 .dialog-body {
   display: grid;
   gap: 14px;

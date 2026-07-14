@@ -683,11 +683,17 @@ export default function RoteirizacaoPage() {
   const [reviewDialog, setReviewDialog] = useState(null);
   const [reviewSaving, setReviewSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshingEntries, setRefreshingEntries] = useState(false);
   const [error, setError] = useState("");
   const canReview = user?.role === "ADMIN" || user?.role === "ANALYST";
 
   async function loadAll(pageOverride = entriesPage) {
-    setLoading(true);
+    const hasLoadedData = entries.length || activeRequests.length || historyRequests.length || rcas.length || entriesMeta.total;
+    if (hasLoadedData) {
+      setRefreshingEntries(true);
+    } else {
+      setLoading(true);
+    }
     setError("");
     try {
       const params = new URLSearchParams();
@@ -716,6 +722,7 @@ export default function RoteirizacaoPage() {
       setError(requestError.message);
     } finally {
       setLoading(false);
+      setRefreshingEntries(false);
     }
   }
 
@@ -889,7 +896,8 @@ export default function RoteirizacaoPage() {
         {loading ? (
           <div>Carregando roteirização...</div>
         ) : (
-          <div className="table-wrap">
+          <div className={`table-wrap ${refreshingEntries ? "is-refreshing" : ""}`}>
+            {refreshingEntries ? <div className="table-refresh-indicator">Atualizando filtros...</div> : null}
             <table>
               <thead>
                 <tr>
