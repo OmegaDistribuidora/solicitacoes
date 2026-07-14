@@ -1,0 +1,257 @@
+import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../components/AuthProvider";
+import { apiJson } from "../services/api";
+
+function parseCodes(value) {
+  return String(value || "")
+    .split(/[\s,;]+/)
+    .map((item) => Number(item.trim()))
+    .filter((item, index, list) => Number.isInteger(item) && item > 0 && list.indexOf(item) === index);
+}
+
+function roleLabel(role) {
+  if (role === "ADMIN") return "Administrador";
+  if (role === "ANALYST") return "Analista";
+  return "Supervisor";
+}
+
+function UserModal({ initialUser, onClose, onSave, saving, error }) {
+  const isEditing = Boolean(initialUser?.id);
+  const [form, setForm] = useState({
+    displayName: initialUser?.displayName || "",
+    username: initialUser?.username || "",
+    role: initialUser?.role || "SUPERVISOR",
+    routeEnabled:
+      initialUser?.role === "ADMIN" || initialUser?.role === "ANALYST"
+        ? true
+        : Boolean(initialUser?.modules?.some((item) => item.module === "ROUTEIRIZACAO")),
+    routeCodes: initialUser?.routeSupervisorCodes?.join(", ") || "",
+    active: initialUser?.active ?? true
+  });
+  const parsedCodes = useMemo(() => parseCodes(form.routeCodes), [form.routeCodes]);
+
+  function updateField(field, value) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    await onSave({
+      displayName: form.displayName,
+      username: form.username,
+      role: form.role,
+      active: Boolean(form.active),
+      routeirizacao: {
+        enabled: form.role === "ADMIN" || form.role === "ANALYST" ? true : Boolean(form.routeEnabled),
+        supervisorCodes: form.role === "SUPERVISOR" ? parsedCodes : []
+      }
+    });
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <section className="modal-card modal-card-sm" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <div className="eyebrow">Usuarios</div>
+            <h2>{isEditing ? "Editar usuario" : "Novo usuario"}</h2>
+          </div>
+          <button type="button" className="icon-btn" onClick={onClose}>
+            x
+          </button>
+        </div>
+
+        <form className="form-stack" onSubmit={handleSubmit}>
+          <label>
+            Nome de exibicao
+            <input value={form.displayName} onChange={(event) => updateField("displayName", event.target.value)} required />
+          </label>
+          <label>
+            Login SSO
+            <input value={form.username} onChange={(event) => updateField("username", event.target.value)} required />
+          </label>
+          <label>
+            Perfil
+            <select value={form.role} onChange={(event) => updateField("role", event.target.value)}>
+              <option value="SUPERVISOR">Supervisor</option>
+              <option value="ANALYST">Analista</option>
+              <option value="ADMIN">Administrador</option>
+            </select>
+          </label>
+          {form.role === "SUPERVISOR" ? (
+            <>
+              <label className="inline-check">
+                <input type="checkbox" checked={form.routeEnabled} onChange={(event) => updateField("routeEnabled", event.target.checked)} />
+                <span>Acesso ao modulo Roteirizacao</span>
+              </label>
+              {form.routeEnabled ? (
+                <label>
+                  Codigos de supervisor
+                  <textarea
+                    value={form.routeCodes}
+                    onChange={(event) => updateField("routeCodes", event.target.value)}
+                    rows={3}
+                    placeholder="Ex.: 29, 33"
+                    required
+                  />
+                  <span className="muted small">Codigos reconhecidos: {parsedCodes.length ? parsedCodes.join(", ") : "nenhum"}</span>
+                </label>
+              ) : null}
+            </>
+          ) : null}
+          <label className="inline-check">
+            <input type="checkbox" checked={form.active} onChange={(event) => updateField("active", event.target.checked)} />
+            <span>Usuario ativo</span>
+          </label>
+          {error ? <p className="error-text">{error}</p> : null}
+          <div className="modal-actions">
+            <button type="submit" className="primary-btn" disabled={saving}>
+              {saving ? "Salvando..." : "Salvar"}
+            </button>
+            <button type="button" className="secondary-btn" onClick={onClose}>
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+export default function AdminUsersPage() {
+  const { token, user: authUser, updateSession } = useAuth();
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [modalUser, setModalUser] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  async function loadUsers() {
+    setLoading(true);
+    setError("");
+    try {
+      const payload = await apiJson("/users", { token });
+      setUsers(payload.users || []);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadUsers();
+  }, [token]);
+
+  async function handleSave(payload) {
+    setSaving(true);
+    setSaveError("");
+    setNotice("");
+    try {
+      const response = modalUser?.id
+        ? await apiJson(`/users/${modalUser.id}`, { method: "PUT", token, data: payload })
+        : await apiJson("/users", { method: "POST", token, data: payload });
+      if (response?.sessionToken && response?.user?.id === authUser?.id) {
+        updateSession(response.sessionToken, response.user);
+      }
+      setModalUser(null);
+      setNotice(modalUser?.id ? "Usuario atualizado com sucesso." : "Usuario criado com sucesso.");
+      await loadUsers();
+    } catch (requestError) {
+      setSaveError(requestError.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(targetUser) {
+    if (!window.confirm(`Excluir o usuario ${targetUser.displayName}?`)) return;
+    setNotice("");
+    setError("");
+    try {
+      await apiJson(`/users/${targetUser.id}`, { method: "DELETE", token });
+      setNotice("Usuario excluido com sucesso.");
+      await loadUsers();
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }
+
+  return (
+    <div className="page-stack">
+      <section className="page-card compact-page-header">
+        <div className="section-header">
+          <div>
+            <div className="eyebrow">Administracao</div>
+            <h1>Usuarios</h1>
+            <p className="muted">Gerencie login SSO, perfil e acessos por modulo.</p>
+          </div>
+          <button type="button" className="primary-btn" onClick={() => setModalUser({})}>
+            Novo usuario
+          </button>
+        </div>
+        {notice ? <p className="success-text">{notice}</p> : null}
+        {error ? <p className="error-text">{error}</p> : null}
+      </section>
+      <section className="table-card">
+        {loading ? (
+          <div>Carregando usuarios...</div>
+        ) : users.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Login</th>
+                  <th>Perfil</th>
+                  <th>Roteirizacao</th>
+                  <th>Status</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user) => (
+                  <tr key={user.id}>
+                    <td>{user.displayName}</td>
+                    <td>{user.username}</td>
+                    <td>{roleLabel(user.role)}</td>
+                    <td>{user.role === "ADMIN" || user.role === "ANALYST" ? "Todos" : user.routeSupervisorCodes?.join(", ") || "-"}</td>
+                    <td>{user.active ? "Ativo" : "Inativo"}</td>
+                    <td>
+                      <div className="inline-actions">
+                        <button type="button" className="secondary-btn compact-btn" onClick={() => setModalUser(user)}>
+                          Editar
+                        </button>
+                        {authUser?.id !== user.id ? (
+                          <button type="button" className="danger-btn compact-btn" onClick={() => handleDelete(user)}>
+                            Excluir
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="empty-state">Nenhum usuario cadastrado.</div>
+        )}
+      </section>
+      {modalUser !== null ? (
+        <UserModal
+          initialUser={modalUser}
+          onClose={() => {
+            setModalUser(null);
+            setSaveError("");
+          }}
+          onSave={handleSave}
+          saving={saving}
+          error={saveError}
+        />
+      ) : null}
+    </div>
+  );
+}

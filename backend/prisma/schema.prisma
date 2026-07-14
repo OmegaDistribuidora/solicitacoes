@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  ANALYST
+  SUPERVISOR
+}
+
+enum ModuleKey {
+  ROUTEIRIZACAO
+}
+
+enum RouteRequestKind {
+  INCLUSAO
+  MODIFICACAO
+}
+
+enum RouteRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RouteRequestItemAction {
+  ADD
+  UPDATE
+}
+
+model User {
+  id               Int                @id @default(autoincrement())
+  username         String             @unique
+  displayName      String
+  role             UserRole           @default(SUPERVISOR)
+  active           Boolean            @default(true)
+  moduleAccesses   UserModuleAccess[]
+  auditLogs        AuditLog[]
+  routeRequests    RouteRequest[]     @relation("RouteRequester")
+  reviewedRequests RouteRequest[]     @relation("RouteReviewer")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([role, active])
+}
+
+model UserModuleAccess {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  module          ModuleKey
+  supervisorCodes Int[]     @default([])
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([userId, module])
+  @@index([module])
+}
+
+model AuditLog {
+  id               Int       @id @default(autoincrement())
+  actorUserId      Int?
+  actorUsername    String?
+  actorDisplayName String?
+  actorRole        UserRole?
+  action           String
+  entityType       String
+  entityId         String?
+  summary          String
+  before           Json?
+  after            Json?
+  metadata         Json?
+  actorUser        User?     @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime  @default(now())
+
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model BaseRca {
+  id          Int      @id @default(autoincrement())
+  codgerente  Int?
+  coordenador String?
+  codsup      Int
+  supervisor  String
+  codusur     Int      @unique
+  rca         String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("base_rca")
+  @@index([codsup])
+  @@index([rca])
+}
+
+model RoutingEntry {
+  id             Int      @id @default(autoincrement())
+  codgerente     Int?
+  coordenador    String?
+  codsup         Int
+  supervisor     String
+  codusur        Int
+  rca            String
+  codcli         Int
+  cliente        String
+  dia            String
+  tipo           String
+  dataAlteracao  DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([codusur, codcli])
+  @@index([codsup])
+  @@index([codusur])
+  @@index([dia])
+  @@index([tipo])
+}
+
+model RouteRequest {
+  id              Int                 @id @default(autoincrement())
+  kind            RouteRequestKind
+  status          RouteRequestStatus  @default(PENDING)
+  requesterUserId Int
+  requesterUser   User                @relation("RouteRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
+  reviewerUserId  Int?
+  reviewerUser    User?               @relation("RouteReviewer", fields: [reviewerUserId], references: [id], onDelete: SetNull)
+  reviewReason    String?
+  reviewedAt      DateTime?
+  items           RouteRequestItem[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([status, createdAt])
+  @@index([requesterUserId, createdAt])
+}
+
+model RouteRequestItem {
+  id            Int                    @id @default(autoincrement())
+  requestId     Int
+  request       RouteRequest           @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  action        RouteRequestItemAction
+  codgerente    Int?
+  coordenador   String?
+  codsup        Int
+  supervisor    String
+  codusur       Int
+  rca           String
+  codcli        Int
+  cliente       String?
+  currentDia    String?
+  currentTipo   String?
+  requestedDia  String
+  requestedTipo String
+  createdAt     DateTime               @default(now())
+
+  @@index([requestId])
+  @@index([codsup])
+  @@index([codusur, codcli])
+}
