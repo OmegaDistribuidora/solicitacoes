@@ -10,7 +10,10 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "import:routing": "tsx scripts/import-routing-from-excel.ts",
-    "sync:base-rca": "tsx scripts/sync-base-rca.ts"
+    "sync:base-rca": "tsx scripts/sync-base-rca.ts",
+    "solicitacoes-trade:criar-froteirizacao-local": "tsx scripts/dag-solicitacoes-trade-criar-froteirizacao-local.ts",
+    "dag:solicitacoes-trade:atualizar-base-rca": "tsx scripts/dag-solicitacoes-trade-atualizar-base-rca.ts",
+    "dag:solicitacoes-trade:atualizar-roteirizacao": "tsx scripts/dag-solicitacoes-trade-atualizar-roteirizacao.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",

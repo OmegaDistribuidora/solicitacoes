@@ -45,5 +45,9 @@ export const env = {
     databaseUrl: String(process.env.SOURCE_DATABASE_URL || "").trim(),
     schema: String(process.env.SOURCE_RCA_SCHEMA || "filial").trim(),
     table: String(process.env.SOURCE_RCA_TABLE || "deqpcomercial").trim()
+  },
+  sourceRouting: {
+    schema: String(process.env.SOURCE_ROUTING_SCHEMA || process.env.SOURCE_RCA_SCHEMA || "filial").trim(),
+    table: String(process.env.SOURCE_ROUTING_TABLE || "fRoteirizacao").trim()
   }
 };

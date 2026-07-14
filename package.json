@@ -15,7 +15,10 @@
     "prisma:generate": "npm run prisma:generate --workspace backend",
     "prisma:push": "npm run prisma:push --workspace backend",
     "import:routing": "npm run import:routing --workspace backend",
-    "sync:base-rca": "npm run sync:base-rca --workspace backend"
+    "sync:base-rca": "npm run sync:base-rca --workspace backend",
+    "solicitacoes-trade:criar-froteirizacao-local": "npm run solicitacoes-trade:criar-froteirizacao-local --workspace backend",
+    "dag:solicitacoes-trade:atualizar-base-rca": "npm run dag:solicitacoes-trade:atualizar-base-rca --workspace backend",
+    "dag:solicitacoes-trade:atualizar-roteirizacao": "npm run dag:solicitacoes-trade:atualizar-roteirizacao --workspace backend"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
