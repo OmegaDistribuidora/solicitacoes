@@ -183,7 +183,6 @@ export async function registerRotaPromotorRoutes(app: FastifyInstance): Promise<
           status: "APPROVED",
           sourceId,
           requesterUserId: authUser.userId,
-          reviewerUserId: authUser.userId,
           reviewReason: "Aprovacao automatica.",
           reviewedAt: nowFortaleza(),
           currentData: current ? snapshot(current) : undefined,
