@@ -66,7 +66,7 @@ with DAG(
         "retry_delay": timedelta(minutes=1),
     },
     start_date=pendulum.datetime(2026, 10, 8, 0, 0, 0, tz=LOCAL_TZ),
-    schedule="*/1 * * * *",
+    schedule="*/5 * * * *",
     catchup=False,
     max_active_runs=1,
     dagrun_timeout=timedelta(minutes=5),
