@@ -843,6 +843,21 @@ p {
   gap: 14px;
 }
 
+.photo-upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.photo-upload-grid .file-drop > strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.photo-upload-grid .file-drop > small {
+  color: var(--muted);
+}
+
 .book-record-card {
   display: grid;
   gap: 14px;
@@ -936,7 +951,8 @@ p {
 
   .filters-grid,
   .route-form-grid,
-  .form-two {
+  .form-two,
+  .photo-upload-grid {
     grid-template-columns: 1fr;
   }
 

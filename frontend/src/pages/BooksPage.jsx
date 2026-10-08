@@ -2,11 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { apiFormData, apiJson } from "../services/api";
 
-const PHOTO_TYPES = [
-  { value: "FRENTE_LOJA", label: "Frente de Loja" },
-  { value: "ACAO", label: "Ação" }
-];
-
 function photoTypeLabel(value) {
   return value === "FRENTE_LOJA" ? "Frente de Loja" : value === "ACAO" ? "Ação" : "Capa";
 }
@@ -18,8 +13,7 @@ function initialRecord(record, index) {
     promotor: record?.promotor || "",
     codigoCliente: record?.codigoCliente || "",
     existingPhotos: (record?.anexos || []).filter((item) => item.tipo !== "CAPA"),
-    newPhotos: [],
-    nextPhotoType: "FRENTE_LOJA"
+    newPhotos: []
   };
 }
 
@@ -39,9 +33,9 @@ function BookForm({ book, token, onClose, onSaved }) {
     setRecords((current) => current.map((record, recordIndex) => (recordIndex === index ? { ...record, ...patch } : record)));
   }
 
-  function addPhotos(index, files) {
+  function addPhotos(index, type, files) {
     const record = records[index];
-    const additions = Array.from(files).map((file) => ({ key: `${Date.now()}-${crypto.randomUUID()}`, file, type: record.nextPhotoType }));
+    const additions = Array.from(files).map((file) => ({ key: `${Date.now()}-${crypto.randomUUID()}`, file, type }));
     updateRecord(index, { newPhotos: [...record.newPhotos, ...additions] });
   }
 
@@ -116,11 +110,11 @@ function BookForm({ book, token, onClose, onSaved }) {
                   <label>Código do cliente<input required type="number" min="1" step="1" value={record.codigoCliente} onChange={(event) => updateRecord(index, { codigoCliente: event.target.value })} /></label>
                 </div>
                 {record.existingPhotos.length ? <div className="book-photo-grid">{record.existingPhotos.map((photo) => <figure className="book-photo" key={photo.id}><img src={photo.url} alt={photo.nomeOriginal} /><figcaption>{photoTypeLabel(photo.tipo)}</figcaption><button type="button" className="danger-btn compact-btn" onClick={() => updateRecord(index, { existingPhotos: record.existingPhotos.filter((item) => item.id !== photo.id) })}>Remover</button></figure>)}</div> : null}
-                <div className="form-two">
-                  <label>Tipo das próximas fotos<select value={record.nextPhotoType} onChange={(event) => updateRecord(index, { nextPhotoType: event.target.value })}>{PHOTO_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
-                  <label className="file-drop">Adicionar fotos<input type="file" multiple accept="image/png,image/jpeg" onChange={(event) => { addPhotos(index, event.target.files || []); event.target.value = ""; }} /><span>Selecionar imagens</span><strong>PNG ou JPEG/JPG, até 25 MB por imagem</strong></label>
+                <div className="photo-upload-grid">
+                  <label className="file-drop"><strong>Fotos de Frente de Loja</strong><input type="file" multiple accept="image/png,image/jpeg" onChange={(event) => { addPhotos(index, "FRENTE_LOJA", event.target.files || []); event.target.value = ""; }} /><span>Adicionar fotos</span><small>PNG ou JPEG/JPG, até 25 MB por imagem</small></label>
+                  <label className="file-drop"><strong>Fotos de Ação</strong><input type="file" multiple accept="image/png,image/jpeg" onChange={(event) => { addPhotos(index, "ACAO", event.target.files || []); event.target.value = ""; }} /><span>Adicionar fotos</span><small>PNG ou JPEG/JPG, até 25 MB por imagem</small></label>
                 </div>
-                {record.newPhotos.length ? <div className="new-photo-list">{record.newPhotos.map((photo) => <div className="mini-row" key={photo.key}><span>{photo.file.name}</span><select value={photo.type} onChange={(event) => updateRecord(index, { newPhotos: record.newPhotos.map((item) => item.key === photo.key ? { ...item, type: event.target.value } : item) })}>{PHOTO_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select><button type="button" className="danger-btn compact-btn" onClick={() => updateRecord(index, { newPhotos: record.newPhotos.filter((item) => item.key !== photo.key) })}>Remover</button></div>)}</div> : null}
+                {record.newPhotos.length ? <div className="new-photo-list">{record.newPhotos.map((photo) => <div className="mini-row" key={photo.key}><span>{photo.file.name}</span><strong>{photoTypeLabel(photo.type)}</strong><button type="button" className="danger-btn compact-btn" onClick={() => updateRecord(index, { newPhotos: record.newPhotos.filter((item) => item.key !== photo.key) })}>Remover</button></div>)}</div> : null}
               </section>
             ))}
           </div>
