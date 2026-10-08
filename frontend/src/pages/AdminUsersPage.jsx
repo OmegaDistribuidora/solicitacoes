@@ -110,7 +110,7 @@ function UserModal({ initialUser, onClose, onSave, saving, error }) {
                   checked={form.promoterRouteEnabled}
                   onChange={(event) => updateField("promoterRouteEnabled", event.target.checked)}
                 />
-                <span>Acesso ao modulo Rota de Promotor</span>
+                <span>Acesso ao módulo Promotores</span>
               </label>
             </>
           ) : null}
@@ -222,7 +222,7 @@ export default function AdminUsersPage() {
                   <th>Login</th>
                   <th>Perfil</th>
                   <th>Roteirizacao</th>
-                  <th>Rota de Promotor</th>
+                  <th>Promotores</th>
                   <th>Status</th>
                   <th>Acoes</th>
                 </tr>

@@ -180,8 +180,12 @@ export async function registerRotaPromotorRoutes(app: FastifyInstance): Promise<
       const routeRequest = await tx.promoterRouteRequest.create({
         data: {
           action,
+          status: "APPROVED",
           sourceId,
           requesterUserId: authUser.userId,
+          reviewerUserId: authUser.userId,
+          reviewReason: "Aprovacao automatica.",
+          reviewedAt: nowFortaleza(),
           currentData: current ? snapshot(current) : undefined,
           requestedData: requestedData || undefined
         },
@@ -191,10 +195,10 @@ export async function registerRotaPromotorRoutes(app: FastifyInstance): Promise<
       await recordAudit(
         {
           actor: authUser,
-          action: "CREATE_PROMOTER_ROUTE_REQUEST",
+          action: "CREATE_AUTO_APPROVED_PROMOTER_ROUTE_REQUEST",
           entityType: "PROMOTER_ROUTE_REQUEST",
           entityId: routeRequest.id,
-          summary: `Solicitacao de rota de promotor ${routeRequest.id} criada (${action}).`,
+          summary: `Solicitacao de rota de promotor ${routeRequest.id} criada e aprovada automaticamente (${action}).`,
           before: current ? snapshot(current) : undefined,
           after: routeRequest
         },

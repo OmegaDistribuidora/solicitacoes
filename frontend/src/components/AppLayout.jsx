@@ -21,7 +21,7 @@ export default function AppLayout() {
       items.push({ to: "/modules/roteirizacao", label: "Roteirizacao" });
     }
     if (hasAllModules || modules.includes("ROTA_PROMOTOR")) {
-      items.push({ to: "/modules/rota-promotor", label: "Rota de Promotor" });
+      items.push({ to: "/modules/promotores", label: "Promotores" });
     }
     if (user?.role === "ADMIN") {
       items.unshift({ to: "/dashboard", label: "Inicio" });

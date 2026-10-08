@@ -60,10 +60,71 @@ model User {
   reviewedRequests              RouteRequest[]         @relation("RouteReviewer")
   promoterRouteRequests         PromoterRouteRequest[] @relation("PromoterRouteRequester")
   reviewedPromoterRouteRequests PromoterRouteRequest[] @relation("PromoterRouteReviewer")
+  booksCriados                  Book[]                 @relation("BookCriador")
+  booksAtualizados              Book[]                 @relation("BookAtualizador")
   createdAt                     DateTime               @default(now())
   updatedAt                     DateTime               @updatedAt
 
   @@index([role, active])
+}
+
+model Book {
+  id               Int            @id @default(autoincrement())
+  nome             String         @db.VarChar(200)
+  codigoFornecedor Int            @map("codigo_fornecedor")
+  periodo          String         @db.VarChar(8)
+  dataPeriodo      DateTime       @map("data_periodo") @db.Date
+  criadoPorId      Int?           @map("criado_por_id")
+  criadoPor        User?          @relation("BookCriador", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  atualizadoPorId  Int?           @map("atualizado_por_id")
+  atualizadoPor    User?          @relation("BookAtualizador", fields: [atualizadoPorId], references: [id], onDelete: SetNull)
+  registros        RegistroBook[]
+  anexos           AnexoBook[]
+  criadoEm         DateTime       @default(now()) @map("criado_em")
+  atualizadoEm     DateTime       @updatedAt @map("atualizado_em")
+
+  @@index([codigoFornecedor])
+  @@index([dataPeriodo])
+  @@index([criadoEm])
+  @@map("books")
+}
+
+model RegistroBook {
+  id            Int         @id @default(autoincrement())
+  bookId        Int         @map("book_id")
+  book          Book        @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  promotor      String      @db.VarChar(200)
+  codigoCliente Int         @map("codigo_cliente")
+  ordem         Int         @default(0)
+  anexos        AnexoBook[]
+  criadoEm      DateTime    @default(now()) @map("criado_em")
+  atualizadoEm  DateTime    @updatedAt @map("atualizado_em")
+
+  @@index([bookId])
+  @@index([codigoCliente])
+  @@index([promotor])
+  @@map("registros_book")
+}
+
+model AnexoBook {
+  id           Int           @id @default(autoincrement())
+  bookId       Int           @map("book_id")
+  book         Book          @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  registroId   Int?          @map("registro_id")
+  registro     RegistroBook? @relation(fields: [registroId], references: [id], onDelete: Cascade)
+  tipo         String        @db.VarChar(30)
+  nomeOriginal String        @map("nome_original") @db.VarChar(255)
+  nomeArquivo  String        @map("nome_arquivo") @db.VarChar(255)
+  mimeType     String        @map("mime_type") @db.VarChar(100)
+  tamanhoBytes Int           @map("tamanho_bytes")
+  caminho      String        @db.VarChar(1000)
+  url          String        @db.VarChar(1500)
+  criadoEm     DateTime      @default(now()) @map("criado_em")
+
+  @@index([bookId])
+  @@index([registroId])
+  @@index([tipo])
+  @@map("anexos_book")
 }
 
 model PromoterRouteEntry {

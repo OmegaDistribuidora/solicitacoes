@@ -54,8 +54,8 @@ function RequestForm({ entry, saving, error, onClose, onSave }) {
       <section className="modal-card" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <div>
-            <div className="eyebrow">Rota de Promotor</div>
-            <h2>{entry ? "Solicitar alteracao" : "Solicitar inclusao"}</h2>
+            <div className="eyebrow">Promotores / Rota</div>
+            <h2>{entry ? "Editar rota" : "Nova rota"}</h2>
           </div>
           <button type="button" className="icon-btn" onClick={onClose}>x</button>
         </div>
@@ -77,7 +77,7 @@ function RequestForm({ entry, saving, error, onClose, onSave }) {
           <label>Observacao<textarea rows={3} value={form.obs} onChange={(event) => update("obs", event.target.value)} /></label>
           {error ? <p className="error-text">{error}</p> : null}
           <div className="modal-actions">
-            <button className="primary-btn" type="submit" disabled={saving}>{saving ? "Enviando..." : "Criar solicitacao"}</button>
+            <button className="primary-btn" type="submit" disabled={saving}>{saving ? "Enviando..." : "Salvar alteracao"}</button>
             <button className="secondary-btn" type="button" onClick={onClose}>Cancelar</button>
           </div>
         </form>
@@ -86,7 +86,7 @@ function RequestForm({ entry, saving, error, onClose, onSave }) {
   );
 }
 export default function RotaPromotorPage() {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const [entries, setEntries] = useState([]);
   const [requests, setRequests] = useState([]);
   const [query, setQuery] = useState("");
@@ -97,7 +97,6 @@ export default function RotaPromotorPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
-  const canReview = user?.role === "ADMIN" || user?.role === "ANALYST";
 
   async function load(nextPage = page, nextQuery = appliedQuery) {
     setError("");
@@ -132,24 +131,10 @@ export default function RotaPromotorPage() {
   }
 
   async function requestDelete(entry) {
-    if (!window.confirm(`Criar solicitacao para excluir ${entry.codcli} - ${entry.cliente || "cliente"}?`)) return;
+    if (!window.confirm(`Excluir a rota de ${entry.codcli} - ${entry.cliente || "cliente"}? A alteracao sera aprovada automaticamente.`)) return;
     try {
       await apiJson("/modules/rota-promotor/requests", {
         method: "POST", token, data: { action: "DELETE", sourceId: entry.sourceId }
-      });
-      await load();
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  }
-
-  async function review(item, decision) {
-    const reason = decision === "REJECTED" ? window.prompt("Motivo da recusa:", "") : "";
-    if (decision === "REJECTED" && reason === null) return;
-    if (decision === "APPROVED" && !window.confirm(`Aprovar a solicitacao #${item.id}?`)) return;
-    try {
-      await apiJson(`/modules/rota-promotor/requests/${item.id}/review`, {
-        method: "PATCH", token, data: { decision, reason: reason || "" }
       });
       await load();
     } catch (requestError) {
@@ -170,7 +155,6 @@ export default function RotaPromotorPage() {
           <td>{data.frequencia || "-"} / {data.dia || "-"}</td>
           <td>{item.requesterUser?.displayName || "-"}</td>
           <td><strong>{statusLabel(item.status)}</strong>{item.applyError ? <div className="error-text small">{item.applyError}</div> : null}</td>
-          <td>{canReview && item.status === "PENDING" ? <div className="inline-actions"><button className="secondary-btn compact-btn" onClick={() => review(item, "APPROVED")}>Aprovar</button><button className="danger-btn compact-btn" onClick={() => review(item, "REJECTED")}>Recusar</button></div> : "-"}</td>
         </tr>
       );
     });
@@ -179,7 +163,7 @@ export default function RotaPromotorPage() {
   return (
     <div className="page-stack">
       <section className="page-card compact-page-header">
-        <div className="section-header"><div><div className="eyebrow">Merchandising</div><h1>Rota de Promotor</h1><p className="muted">Solicite inclusoes, alteracoes e exclusoes na tabela local de promotores.</p></div><button className="primary-btn" onClick={() => setEditing(null)}>Nova rota</button></div>
+        <div className="section-header"><div><div className="eyebrow">Promotores</div><h2>Rotas</h2><p className="muted">Inclusoes, alteracoes e exclusoes sao aprovadas automaticamente e aplicadas no Omega pela sincronizacao.</p></div><button className="primary-btn" onClick={() => setEditing(null)}>Nova rota</button></div>
         {error ? <p className="error-text">{error}</p> : null}
       </section>
       <section className="table-card">
@@ -188,8 +172,8 @@ export default function RotaPromotorPage() {
         {!entries.length ? <div className="empty-state">Nenhuma rota encontrada.</div> : null}
         <div className="pagination-bar"><button className="secondary-btn compact-btn" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Anterior</button><span>Pagina {page} de {pageInfo.totalPages}</span><button className="secondary-btn compact-btn" disabled={page >= pageInfo.totalPages} onClick={() => setPage((current) => current + 1)}>Proxima</button></div>
       </section>
-      <section className="table-card"><h2>Solicitacoes em andamento</h2>{activeRequests.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>Acao</th><th>Promotor</th><th>Cliente</th><th>Rota</th><th>Solicitante</th><th>Status</th><th>Revisao</th></tr></thead><tbody>{requestRows(activeRequests)}</tbody></table></div> : <div className="empty-state">Nenhuma solicitacao em andamento.</div>}</section>
-      <section className="table-card"><h2>Historico</h2>{historyRequests.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>Acao</th><th>Promotor</th><th>Cliente</th><th>Rota</th><th>Solicitante</th><th>Status</th><th></th></tr></thead><tbody>{requestRows(historyRequests)}</tbody></table></div> : <div className="empty-state">Nenhuma solicitacao concluida.</div>}</section>
+      <section className="table-card"><h2>Alteracoes aguardando sincronizacao</h2>{activeRequests.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>Acao</th><th>Promotor</th><th>Cliente</th><th>Rota</th><th>Solicitante</th><th>Status</th></tr></thead><tbody>{requestRows(activeRequests)}</tbody></table></div> : <div className="empty-state">Nenhuma alteracao aguardando sincronizacao.</div>}</section>
+      <section className="table-card"><h2>Historico</h2>{historyRequests.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>Acao</th><th>Promotor</th><th>Cliente</th><th>Rota</th><th>Solicitante</th><th>Status</th></tr></thead><tbody>{requestRows(historyRequests)}</tbody></table></div> : <div className="empty-state">Nenhuma alteracao concluida.</div>}</section>
       {editing !== undefined ? <RequestForm entry={editing} saving={saving} error={formError} onClose={() => { setEditing(undefined); setFormError(""); }} onSave={saveRequest} /> : null}
     </div>
   );

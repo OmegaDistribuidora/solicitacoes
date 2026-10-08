@@ -4,6 +4,7 @@ dist
 backend/.env
 frontend/.env
 backend/uploads
+anexos/
 *.log
 __pycache__/
 *.pyc

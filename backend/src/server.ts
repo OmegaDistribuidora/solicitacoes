@@ -13,6 +13,7 @@ import { registerAuditRoutes } from "./routes/audit";
 import { registerDashboardRoutes } from "./routes/dashboard";
 import { registerRoteirizacaoRoutes } from "./routes/modules/roteirizacao";
 import { registerRotaPromotorRoutes } from "./routes/modules/rotaPromotor";
+import { registerBookRoutes } from "./routes/modules/books";
 import type { AuthUser } from "./types";
 
 declare module "fastify" {
@@ -21,7 +22,7 @@ declare module "fastify" {
   }
 }
 
-const app = Fastify({ logger: false });
+const app = Fastify({ logger: false, trustProxy: true });
 
 async function bootstrap(): Promise<void> {
   await app.register(cors, {
@@ -32,7 +33,7 @@ async function bootstrap(): Promise<void> {
   });
 
   await app.register(fastifyMultipart, {
-    limits: { fileSize: 25 * 1024 * 1024 }
+    limits: { fileSize: 25 * 1024 * 1024, files: 200, fields: 5, parts: 205 }
   });
 
   app.get("/api/health", async () => ({ status: "ok", timeZone: env.timeZone }));
@@ -43,6 +44,17 @@ async function bootstrap(): Promise<void> {
   await registerDashboardRoutes(app);
   await registerRoteirizacaoRoutes(app);
   await registerRotaPromotorRoutes(app);
+  await registerBookRoutes(app);
+
+  fs.mkdirSync(env.attachmentsDir, { recursive: true });
+  await app.register(fastifyStatic, {
+    root: env.attachmentsDir,
+    prefix: "/anexos/",
+    decorateReply: false,
+    cacheControl: true,
+    maxAge: "30d",
+    immutable: true
+  });
 
   const frontendDist = path.resolve(__dirname, "..", "..", "frontend", "dist");
   if (fs.existsSync(frontendDist)) {

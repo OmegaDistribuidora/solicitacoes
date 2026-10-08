@@ -31,6 +31,13 @@ export const env = {
   adminUsername: String(process.env.ADMIN_USERNAME || "admin").trim().toLowerCase(),
   adminDisplayName: String(process.env.ADMIN_DISPLAY_NAME || "Administrador").trim(),
   frontendUrl: String(process.env.FRONTEND_URL || "http://localhost:5173").trim(),
+  publicBaseUrl: String(process.env.PUBLIC_BASE_URL || "").trim().replace(/\/$/, ""),
+  attachmentsDir: path.resolve(
+    String(
+      process.env.ATTACHMENTS_DIR ||
+        (String(process.env.NODE_ENV || "development").trim() === "production" ? "/anexos" : path.resolve(process.cwd(), "anexos"))
+    ).trim()
+  ),
   allowLocalLogin:
     String(process.env.NODE_ENV || "development").trim() !== "production" &&
     String(process.env.LOCAL_LOGIN_ENABLED || "true").trim().toLowerCase() !== "false",
