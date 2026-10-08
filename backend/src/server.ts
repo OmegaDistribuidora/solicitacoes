@@ -12,6 +12,7 @@ import { registerUserRoutes } from "./routes/users";
 import { registerAuditRoutes } from "./routes/audit";
 import { registerDashboardRoutes } from "./routes/dashboard";
 import { registerRoteirizacaoRoutes } from "./routes/modules/roteirizacao";
+import { registerRotaPromotorRoutes } from "./routes/modules/rotaPromotor";
 import type { AuthUser } from "./types";
 
 declare module "fastify" {
@@ -41,6 +42,7 @@ async function bootstrap(): Promise<void> {
   await registerAuditRoutes(app);
   await registerDashboardRoutes(app);
   await registerRoteirizacaoRoutes(app);
+  await registerRotaPromotorRoutes(app);
 
   const frontendDist = path.resolve(__dirname, "..", "..", "frontend", "dist");
   if (fs.existsSync(frontendDist)) {

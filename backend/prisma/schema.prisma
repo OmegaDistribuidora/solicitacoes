@@ -15,6 +15,21 @@ enum UserRole {
 
 enum ModuleKey {
   ROUTEIRIZACAO
+  ROTA_PROMOTOR
+}
+
+enum PromoterRouteRequestAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+enum PromoterRouteRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  APPLIED
+  FAILED
 }
 
 enum RouteRequestKind {
@@ -34,19 +49,66 @@ enum RouteRequestItemAction {
 }
 
 model User {
-  id               Int                @id @default(autoincrement())
-  username         String             @unique
-  displayName      String
-  role             UserRole           @default(SUPERVISOR)
-  active           Boolean            @default(true)
-  moduleAccesses   UserModuleAccess[]
-  auditLogs        AuditLog[]
-  routeRequests    RouteRequest[]     @relation("RouteRequester")
-  reviewedRequests RouteRequest[]     @relation("RouteReviewer")
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id                            Int                    @id @default(autoincrement())
+  username                      String                 @unique
+  displayName                   String
+  role                          UserRole               @default(SUPERVISOR)
+  active                        Boolean                @default(true)
+  moduleAccesses                UserModuleAccess[]
+  auditLogs                     AuditLog[]
+  routeRequests                 RouteRequest[]         @relation("RouteRequester")
+  reviewedRequests              RouteRequest[]         @relation("RouteReviewer")
+  promoterRouteRequests         PromoterRouteRequest[] @relation("PromoterRouteRequester")
+  reviewedPromoterRouteRequests PromoterRouteRequest[] @relation("PromoterRouteReviewer")
+  createdAt                     DateTime               @default(now())
+  updatedAt                     DateTime               @updatedAt
 
   @@index([role, active])
+}
+
+model PromoterRouteEntry {
+  sourceId        String    @id @db.Uuid
+  codpromotor     String?
+  promotor        String?
+  areaatuacao     String?
+  codcli          Int
+  cliente         String?
+  frequencia      String?
+  dia             String?
+  status          String?
+  obs             String?
+  dataInsercao    DateTime?
+  sourceUpdatedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([promotor])
+  @@index([codcli])
+  @@index([dia])
+  @@index([status])
+}
+
+model PromoterRouteRequest {
+  id              Int                        @id @default(autoincrement())
+  action          PromoterRouteRequestAction
+  status          PromoterRouteRequestStatus @default(PENDING)
+  sourceId        String                     @db.Uuid
+  requesterUserId Int
+  requesterUser   User                       @relation("PromoterRouteRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
+  reviewerUserId  Int?
+  reviewerUser    User?                      @relation("PromoterRouteReviewer", fields: [reviewerUserId], references: [id], onDelete: SetNull)
+  currentData     Json?
+  requestedData   Json?
+  reviewReason    String?
+  applyError      String?
+  reviewedAt      DateTime?
+  appliedAt       DateTime?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  @@index([status, createdAt])
+  @@index([sourceId, status])
+  @@index([requesterUserId, createdAt])
 }
 
 model UserModuleAccess {
@@ -94,26 +156,26 @@ model BaseRca {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@map("base_rca")
   @@index([codsup])
   @@index([rca])
+  @@map("base_rca")
 }
 
 model RoutingEntry {
-  id             Int      @id @default(autoincrement())
-  codgerente     Int?
-  coordenador    String?
-  codsup         Int
-  supervisor     String
-  codusur        Int
-  rca            String
-  codcli         Int
-  cliente        String
-  dia            String
-  tipo           String
-  dataAlteracao  DateTime @default(now())
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            Int      @id @default(autoincrement())
+  codgerente    Int?
+  coordenador   String?
+  codsup        Int
+  supervisor    String
+  codusur       Int
+  rca           String
+  codcli        Int
+  cliente       String
+  dia           String
+  tipo          String
+  dataAlteracao DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@unique([codusur, codcli])
   @@index([codsup])
@@ -123,18 +185,18 @@ model RoutingEntry {
 }
 
 model RouteRequest {
-  id              Int                 @id @default(autoincrement())
+  id              Int                @id @default(autoincrement())
   kind            RouteRequestKind
-  status          RouteRequestStatus  @default(PENDING)
+  status          RouteRequestStatus @default(PENDING)
   requesterUserId Int
-  requesterUser   User                @relation("RouteRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
+  requesterUser   User               @relation("RouteRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
   reviewerUserId  Int?
-  reviewerUser    User?               @relation("RouteReviewer", fields: [reviewerUserId], references: [id], onDelete: SetNull)
+  reviewerUser    User?              @relation("RouteReviewer", fields: [reviewerUserId], references: [id], onDelete: SetNull)
   reviewReason    String?
   reviewedAt      DateTime?
   items           RouteRequestItem[]
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   @@index([status, createdAt])
   @@index([requesterUserId, createdAt])

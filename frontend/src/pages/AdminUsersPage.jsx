@@ -26,6 +26,10 @@ function UserModal({ initialUser, onClose, onSave, saving, error }) {
         ? true
         : Boolean(initialUser?.modules?.some((item) => item.module === "ROUTEIRIZACAO")),
     routeCodes: initialUser?.routeSupervisorCodes?.join(", ") || "",
+    promoterRouteEnabled:
+      initialUser?.role === "ADMIN" || initialUser?.role === "ANALYST"
+        ? true
+        : Boolean(initialUser?.promoterRouteEnabled),
     active: initialUser?.active ?? true
   });
   const parsedCodes = useMemo(() => parseCodes(form.routeCodes), [form.routeCodes]);
@@ -44,6 +48,9 @@ function UserModal({ initialUser, onClose, onSave, saving, error }) {
       routeirizacao: {
         enabled: form.role === "ADMIN" || form.role === "ANALYST" ? true : Boolean(form.routeEnabled),
         supervisorCodes: form.role === "SUPERVISOR" ? parsedCodes : []
+      },
+      rotaPromotor: {
+        enabled: form.role === "ADMIN" || form.role === "ANALYST" ? true : Boolean(form.promoterRouteEnabled)
       }
     });
   }
@@ -97,6 +104,14 @@ function UserModal({ initialUser, onClose, onSave, saving, error }) {
                   <span className="muted small">Codigos reconhecidos: {parsedCodes.length ? parsedCodes.join(", ") : "nenhum"}</span>
                 </label>
               ) : null}
+              <label className="inline-check">
+                <input
+                  type="checkbox"
+                  checked={form.promoterRouteEnabled}
+                  onChange={(event) => updateField("promoterRouteEnabled", event.target.checked)}
+                />
+                <span>Acesso ao modulo Rota de Promotor</span>
+              </label>
             </>
           ) : null}
           <label className="inline-check">
@@ -207,6 +222,7 @@ export default function AdminUsersPage() {
                   <th>Login</th>
                   <th>Perfil</th>
                   <th>Roteirizacao</th>
+                  <th>Rota de Promotor</th>
                   <th>Status</th>
                   <th>Acoes</th>
                 </tr>
@@ -218,6 +234,7 @@ export default function AdminUsersPage() {
                     <td>{user.username}</td>
                     <td>{roleLabel(user.role)}</td>
                     <td>{user.role === "ADMIN" || user.role === "ANALYST" ? "Todos" : user.routeSupervisorCodes?.join(", ") || "-"}</td>
+                    <td>{user.role === "ADMIN" || user.role === "ANALYST" || user.promoterRouteEnabled ? "Sim" : "-"}</td>
                     <td>{user.active ? "Ativo" : "Inativo"}</td>
                     <td>
                       <div className="inline-actions">

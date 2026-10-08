@@ -14,7 +14,8 @@
     "solicitacoes-trade:criar-froteirizacao-local": "tsx scripts/dag-solicitacoes-trade-criar-froteirizacao-local.ts",
     "dag:solicitacoes-trade:atualizar-base-rca": "tsx scripts/dag-solicitacoes-trade-atualizar-base-rca.ts",
     "dag:solicitacoes-trade:atualizar-roteirizacao": "tsx scripts/dag-solicitacoes-trade-atualizar-roteirizacao.ts",
-    "dag:solicitacoes-trade:atualizar-froteiro": "tsx scripts/dag-solicitacoes-trade-atualizar-froteiro.ts"
+    "dag:solicitacoes-trade:atualizar-froteiro": "tsx scripts/dag-solicitacoes-trade-atualizar-froteiro.ts",
+    "dag:solicitacoes-trade:sincronizar-rota-promotor": "tsx scripts/dag-solicitacoes-trade-sincronizar-rota-promotor.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",

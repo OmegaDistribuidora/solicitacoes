@@ -7,11 +7,14 @@ import LoginPage from "./pages/LoginPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import AuditPage from "./pages/AuditPage";
 import RoteirizacaoPage from "./pages/RoteirizacaoPage";
+import RotaPromotorPage from "./pages/RotaPromotorPage";
 import { useAuth } from "./components/AuthProvider";
 
 function HomeRedirectPage() {
   const { user } = useAuth();
-  return <Navigate to={user?.role === "ADMIN" ? "/dashboard" : "/modules/roteirizacao"} replace />;
+  if (user?.role === "ADMIN") return <Navigate to="/dashboard" replace />;
+  const modules = user?.modules?.map((item) => item.module) || [];
+  return <Navigate to={modules.includes("ROTEIRIZACAO") ? "/modules/roteirizacao" : "/modules/rota-promotor"} replace />;
 }
 
 export default function App() {
@@ -36,6 +39,7 @@ export default function App() {
           }
         />
         <Route path="modules/roteirizacao" element={<RoteirizacaoPage />} />
+        <Route path="modules/rota-promotor" element={<RotaPromotorPage />} />
         <Route
           path="admin/users"
           element={

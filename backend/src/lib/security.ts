@@ -60,6 +60,8 @@ export async function requireRouteReviewer(request: FastifyRequest, reply: Fasti
   }
 }
 
+export const requirePromoterRouteReviewer = requireRouteReviewer;
+
 export async function getUserModuleAccess(userId: number, module: ModuleKey) {
   const user = await prisma.user.findUnique({
     where: { id: userId },

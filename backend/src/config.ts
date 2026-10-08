@@ -54,5 +54,9 @@ export const env = {
     table: String(process.env.SOURCE_ROTEIRO_TABLE || "fRoteiro").trim(),
     startDate: String(process.env.SOURCE_ROTEIRO_START_DATE || "2026-06-01").trim(),
     endDate: String(process.env.SOURCE_ROTEIRO_END_DATE || "2026-12-31").trim()
+  },
+  sourcePromoterRoute: {
+    schema: String(process.env.SOURCE_PROMOTER_ROUTE_SCHEMA || process.env.SOURCE_RCA_SCHEMA || "filial").trim(),
+    table: String(process.env.SOURCE_PROMOTER_ROUTE_TABLE || "dpromotor").trim()
   }
 };

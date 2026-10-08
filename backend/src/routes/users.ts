@@ -15,7 +15,8 @@ const userSchema = z.object({
       enabled: z.boolean().default(false),
       supervisorCodes: z.array(z.coerce.number().int().positive()).default([])
     })
-    .default({ enabled: false, supervisorCodes: [] })
+    .default({ enabled: false, supervisorCodes: [] }),
+  rotaPromotor: z.object({ enabled: z.boolean().default(false) }).default({ enabled: false })
 });
 
 async function countActiveAdmins(): Promise<number> {
@@ -58,8 +59,17 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
           role: parsed.data.role,
           active: parsed.data.active,
           moduleAccesses:
-            parsed.data.role === "SUPERVISOR" && parsed.data.routeirizacao.enabled
-              ? { create: [{ module: "ROUTEIRIZACAO", supervisorCodes: routeCodes }] }
+            parsed.data.role === "SUPERVISOR"
+              ? {
+                  create: [
+                    ...(parsed.data.routeirizacao.enabled
+                      ? [{ module: "ROUTEIRIZACAO" as const, supervisorCodes: routeCodes }]
+                      : []),
+                    ...(parsed.data.rotaPromotor.enabled
+                      ? [{ module: "ROTA_PROMOTOR" as const, supervisorCodes: [] }]
+                      : [])
+                  ]
+                }
               : undefined
         },
         include: { moduleAccesses: true }
@@ -124,8 +134,17 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
           role: parsed.data.role,
           active: parsed.data.active,
           moduleAccesses:
-            parsed.data.role === "SUPERVISOR" && parsed.data.routeirizacao.enabled
-              ? { create: [{ module: "ROUTEIRIZACAO", supervisorCodes: routeCodes }] }
+            parsed.data.role === "SUPERVISOR"
+              ? {
+                  create: [
+                    ...(parsed.data.routeirizacao.enabled
+                      ? [{ module: "ROUTEIRIZACAO" as const, supervisorCodes: routeCodes }]
+                      : []),
+                    ...(parsed.data.rotaPromotor.enabled
+                      ? [{ module: "ROTA_PROMOTOR" as const, supervisorCodes: [] }]
+                      : [])
+                  ]
+                }
               : undefined
         },
         include: { moduleAccesses: true }

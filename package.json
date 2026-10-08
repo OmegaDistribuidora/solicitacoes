@@ -19,7 +19,8 @@
     "solicitacoes-trade:criar-froteirizacao-local": "npm run solicitacoes-trade:criar-froteirizacao-local --workspace backend",
     "dag:solicitacoes-trade:atualizar-base-rca": "npm run dag:solicitacoes-trade:atualizar-base-rca --workspace backend",
     "dag:solicitacoes-trade:atualizar-roteirizacao": "npm run dag:solicitacoes-trade:atualizar-roteirizacao --workspace backend",
-    "dag:solicitacoes-trade:atualizar-froteiro": "npm run dag:solicitacoes-trade:atualizar-froteiro --workspace backend"
+    "dag:solicitacoes-trade:atualizar-froteiro": "npm run dag:solicitacoes-trade:atualizar-froteiro --workspace backend",
+    "dag:solicitacoes-trade:sincronizar-rota-promotor": "npm run dag:solicitacoes-trade:sincronizar-rota-promotor --workspace backend"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

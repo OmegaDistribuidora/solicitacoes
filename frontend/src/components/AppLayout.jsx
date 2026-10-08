@@ -14,13 +14,21 @@ export default function AppLayout() {
   const navigate = useNavigate();
 
   const navigationItems = useMemo(() => {
-    const items = [{ to: "/modules/roteirizacao", label: "Roteirizacao" }];
+    const modules = user?.modules?.map((item) => item.module) || [];
+    const hasAllModules = user?.role === "ADMIN" || user?.role === "ANALYST";
+    const items = [];
+    if (hasAllModules || modules.includes("ROTEIRIZACAO")) {
+      items.push({ to: "/modules/roteirizacao", label: "Roteirizacao" });
+    }
+    if (hasAllModules || modules.includes("ROTA_PROMOTOR")) {
+      items.push({ to: "/modules/rota-promotor", label: "Rota de Promotor" });
+    }
     if (user?.role === "ADMIN") {
       items.unshift({ to: "/dashboard", label: "Inicio" });
       items.push({ to: "/admin/users", label: "Usuarios" }, { to: "/admin/audit", label: "Auditoria" });
     }
     return items;
-  }, [user?.role]);
+  }, [user?.role, user?.modules]);
 
   const routeCodes = user?.routeSupervisorCodes || [];
   const profileLabel =
