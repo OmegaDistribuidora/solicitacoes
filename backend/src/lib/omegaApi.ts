@@ -51,7 +51,11 @@ export async function listPromoterRoutes(input: { page: number; pageSize: number
   try {
     const response = await fetch(url, {
       method: "GET",
-      headers: { "X-API-Key": env.omegaApi.key, Accept: "application/json" },
+      headers: {
+        "X-API-Key": env.omegaApi.key,
+        "X-Client-Name": "solicitacoes-trade",
+        Accept: "application/json"
+      },
       signal: controller.signal,
       cache: "no-store"
     });
