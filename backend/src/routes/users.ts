@@ -8,7 +8,7 @@ import { normalizeCodes, normalizeUsername, serializeUser } from "../lib/users";
 const userSchema = z.object({
   username: z.string().min(2),
   displayName: z.string().min(2),
-  role: z.enum(["ADMIN", "ANALYST", "SUPERVISOR"]),
+  role: z.enum(["ADMIN", "ANALYST", "SUPERVISOR", "MERCH_COORDINATOR", "PROMOTER"]),
   active: z.boolean().default(true),
   routeirizacao: z
     .object({

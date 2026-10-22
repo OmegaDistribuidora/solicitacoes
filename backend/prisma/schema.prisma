@@ -11,6 +11,21 @@ enum UserRole {
   ADMIN
   ANALYST
   SUPERVISOR
+  MERCH_COORDINATOR
+  PROMOTER
+}
+
+enum BookWorkflowStatus {
+  ACTIVE
+  CLOSED
+  APPROVED
+  REJECTED
+}
+
+enum BookSubmissionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
 }
 
 enum ModuleKey {
@@ -62,6 +77,10 @@ model User {
   reviewedPromoterRouteRequests PromoterRouteRequest[] @relation("PromoterRouteReviewer")
   booksCriados                  Book[]                 @relation("BookCriador")
   booksAtualizados              Book[]                 @relation("BookAtualizador")
+  booksEncerrados               BookWorkflow[]         @relation("BookEncerradoPor")
+  booksRevisados                BookWorkflow[]         @relation("BookRevisadoPor")
+  enviosBook                    BookSubmission[]       @relation("BookEnvioPromotor")
+  enviosBookRevisados           BookSubmission[]       @relation("BookEnvioRevisor")
   createdAt                     DateTime               @default(now())
   updatedAt                     DateTime               @updatedAt
 
@@ -69,24 +88,84 @@ model User {
 }
 
 model Book {
-  id               Int            @id @default(autoincrement())
-  nome             String         @db.VarChar(200)
-  codigoFornecedor Int            @map("codigo_fornecedor")
-  periodo          String         @db.VarChar(8)
-  dataPeriodo      DateTime       @map("data_periodo") @db.Date
-  criadoPorId      Int?           @map("criado_por_id")
-  criadoPor        User?          @relation("BookCriador", fields: [criadoPorId], references: [id], onDelete: SetNull)
-  atualizadoPorId  Int?           @map("atualizado_por_id")
-  atualizadoPor    User?          @relation("BookAtualizador", fields: [atualizadoPorId], references: [id], onDelete: SetNull)
+  id               Int              @id @default(autoincrement())
+  nome             String           @db.VarChar(200)
+  codigoFornecedor Int              @map("codigo_fornecedor")
+  periodo          String           @db.VarChar(8)
+  dataPeriodo      DateTime         @map("data_periodo") @db.Date
+  criadoPorId      Int?             @map("criado_por_id")
+  criadoPor        User?            @relation("BookCriador", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  atualizadoPorId  Int?             @map("atualizado_por_id")
+  atualizadoPor    User?            @relation("BookAtualizador", fields: [atualizadoPorId], references: [id], onDelete: SetNull)
   registros        RegistroBook[]
   anexos           AnexoBook[]
-  criadoEm         DateTime       @default(now()) @map("criado_em")
-  atualizadoEm     DateTime       @updatedAt @map("atualizado_em")
+  workflow         BookWorkflow?
+  envios           BookSubmission[]
+  criadoEm         DateTime         @default(now()) @map("criado_em")
+  atualizadoEm     DateTime         @updatedAt @map("atualizado_em")
 
   @@index([codigoFornecedor])
   @@index([dataPeriodo])
   @@index([criadoEm])
   @@map("books")
+}
+
+model BookWorkflow {
+  bookId         Int                @id @map("book_id")
+  book           Book               @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  status         BookWorkflowStatus @default(ACTIVE)
+  encerradoPorId Int?               @map("encerrado_por_id")
+  encerradoPor   User?              @relation("BookEncerradoPor", fields: [encerradoPorId], references: [id], onDelete: SetNull)
+  encerradoEm    DateTime?          @map("encerrado_em")
+  revisadoPorId  Int?               @map("revisado_por_id")
+  revisadoPor    User?              @relation("BookRevisadoPor", fields: [revisadoPorId], references: [id], onDelete: SetNull)
+  revisadoEm     DateTime?          @map("revisado_em")
+  motivoRevisao  String?            @map("motivo_revisao") @db.VarChar(500)
+  criadoEm       DateTime           @default(now()) @map("criado_em")
+  atualizadoEm   DateTime           @updatedAt @map("atualizado_em")
+
+  @@index([status])
+  @@map("books_controle")
+}
+
+model BookSubmission {
+  id             Int                        @id @default(autoincrement())
+  bookId         Int                        @map("book_id")
+  book           Book                       @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  promotorUserId Int?                       @map("promotor_usuario_id")
+  promotorUser   User?                      @relation("BookEnvioPromotor", fields: [promotorUserId], references: [id], onDelete: SetNull)
+  promotorNome   String                     @map("promotor_nome") @db.VarChar(200)
+  codigoCliente  Int                        @map("codigo_cliente")
+  status         BookSubmissionStatus       @default(PENDING)
+  revisorUserId  Int?                       @map("revisor_usuario_id")
+  revisorUser    User?                      @relation("BookEnvioRevisor", fields: [revisorUserId], references: [id], onDelete: SetNull)
+  motivoRevisao  String?                    @map("motivo_revisao") @db.VarChar(500)
+  revisadoEm     DateTime?                  @map("revisado_em")
+  registroBookId Int?                       @map("registro_book_id")
+  anexos         BookSubmissionAttachment[]
+  criadoEm       DateTime                   @default(now()) @map("criado_em")
+  atualizadoEm   DateTime                   @updatedAt @map("atualizado_em")
+
+  @@index([bookId, status])
+  @@index([promotorUserId, criadoEm])
+  @@map("books_envios")
+}
+
+model BookSubmissionAttachment {
+  id           Int            @id @default(autoincrement())
+  envioId      Int            @map("envio_id")
+  envio        BookSubmission @relation(fields: [envioId], references: [id], onDelete: Cascade)
+  tipo         String         @db.VarChar(30)
+  nomeOriginal String         @map("nome_original") @db.VarChar(255)
+  nomeArquivo  String         @map("nome_arquivo") @db.VarChar(255)
+  mimeType     String         @map("mime_type") @db.VarChar(100)
+  tamanhoBytes Int            @map("tamanho_bytes")
+  caminho      String         @db.VarChar(1000)
+  url          String         @db.VarChar(1500)
+  criadoEm     DateTime       @default(now()) @map("criado_em")
+
+  @@index([envioId])
+  @@map("books_envios_anexos")
 }
 
 model RegistroBook {

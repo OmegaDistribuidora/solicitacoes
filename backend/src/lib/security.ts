@@ -73,9 +73,11 @@ export async function getUserModuleAccess(userId: number, module: ModuleKey) {
   }
 
   const access = user.moduleAccesses.find((item) => item.module === module);
+  const hasImplicitPromoterAccess =
+    module === "ROTA_PROMOTOR" && (user.role === "MERCH_COORDINATOR" || user.role === "PROMOTER");
   return {
     user,
-    canAccess: user.role === "ADMIN" || user.role === "ANALYST" || Boolean(access),
+    canAccess: user.role === "ADMIN" || user.role === "ANALYST" || hasImplicitPromoterAccess || Boolean(access),
     supervisorCodes: user.role === "ADMIN" || user.role === "ANALYST" ? [] : access?.supervisorCodes || []
   };
 }

@@ -56,7 +56,7 @@ function RequestForm({ entry, saving, error, onClose, onSave }) {
   }
 
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+    <div className="modal-backdrop" role="presentation">
       <section className="modal-card" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <div>

@@ -17,6 +17,13 @@ function HomeRedirectPage() {
   return <Navigate to={modules.includes("ROTEIRIZACAO") ? "/modules/roteirizacao" : "/modules/promotores"} replace />;
 }
 
+function ModuleRoute({ module, children }) {
+  const { user } = useAuth();
+  const hasAllModules = user?.role === "ADMIN" || user?.role === "ANALYST";
+  const hasModule = user?.modules?.some((item) => item.module === module);
+  return hasAllModules || hasModule ? children : <Navigate to="/" replace />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -38,8 +45,8 @@ export default function App() {
             </AdminRoute>
           }
         />
-        <Route path="modules/roteirizacao" element={<RoteirizacaoPage />} />
-        <Route path="modules/promotores" element={<PromotoresPage />} />
+        <Route path="modules/roteirizacao" element={<ModuleRoute module="ROUTEIRIZACAO"><RoteirizacaoPage /></ModuleRoute>} />
+        <Route path="modules/promotores" element={<ModuleRoute module="ROTA_PROMOTOR"><PromotoresPage /></ModuleRoute>} />
         <Route path="modules/rota-promotor" element={<Navigate to="/modules/promotores?aba=rota" replace />} />
         <Route
           path="admin/users"

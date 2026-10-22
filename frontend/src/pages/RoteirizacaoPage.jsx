@@ -173,7 +173,7 @@ function CheckboxDropdown({ label, values, options, onChange }) {
 
 function ActionDialog({ title, children, confirmLabel, danger, saving, confirmDisabled, onCancel, onConfirm, wide }) {
   return (
-    <div className="modal-backdrop modal-backdrop-nested" role="presentation" onClick={onCancel}>
+    <div className="modal-backdrop modal-backdrop-nested" role="presentation">
       <section
         className={`modal-card ${wide ? "modal-card-wide" : "modal-card-sm"}`}
         role="dialog"
@@ -205,7 +205,7 @@ function ActionDialog({ title, children, confirmLabel, danger, saving, confirmDi
 
 function FlowPickerModal({ onClose, onPick }) {
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+    <div className="modal-backdrop" role="presentation">
       <section className="modal-card modal-card-sm" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <div>
@@ -338,7 +338,7 @@ function RequestModal({ initialMode, token, rcas, onClose, onCreated }) {
   }
 
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+    <div className="modal-backdrop" role="presentation">
       <section className="modal-card route-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <div>
@@ -601,7 +601,7 @@ function ImportModal({ token, onClose, onCreated }) {
   }
 
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+    <div className="modal-backdrop" role="presentation">
       <section className="modal-card modal-card-sm" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <div>

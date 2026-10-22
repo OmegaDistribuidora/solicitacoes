@@ -16,6 +16,7 @@ export function normalizeCodes(values: Array<number | string | null | undefined>
 export function serializeUser(user: User & { moduleAccesses?: UserModuleAccess[] }) {
   const routeAccess = user.moduleAccesses?.find((item) => item.module === "ROUTEIRIZACAO");
   const promoterRouteAccess = user.moduleAccesses?.find((item) => item.module === "ROTA_PROMOTOR");
+  const hasImplicitPromoterAccess = user.role === "MERCH_COORDINATOR" || user.role === "PROMOTER";
   return {
     id: user.id,
     username: user.username,
@@ -28,12 +29,14 @@ export function serializeUser(user: User & { moduleAccesses?: UserModuleAccess[]
             { module: "ROUTEIRIZACAO", supervisorCodes: [] },
             { module: "ROTA_PROMOTOR", supervisorCodes: [] }
           ]
-        : user.moduleAccesses?.map((item) => ({
+        : hasImplicitPromoterAccess
+          ? [{ module: "ROTA_PROMOTOR", supervisorCodes: [] }]
+          : user.moduleAccesses?.map((item) => ({
             module: item.module,
             supervisorCodes: item.supervisorCodes
           })) || [],
     routeSupervisorCodes: routeAccess?.supervisorCodes || [],
-    promoterRouteEnabled: user.role === "ADMIN" || user.role === "ANALYST" || Boolean(promoterRouteAccess),
+    promoterRouteEnabled: user.role === "ADMIN" || user.role === "ANALYST" || hasImplicitPromoterAccess || Boolean(promoterRouteAccess),
     createdAt: user.createdAt
   };
 }

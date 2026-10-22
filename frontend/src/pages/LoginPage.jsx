@@ -3,6 +3,11 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../components/AuthProvider";
 import omegaLogo from "../assets/logo.png";
 
+function homeFor(user) {
+  if (user?.role === "ADMIN") return "/dashboard";
+  return user?.modules?.some((item) => item.module === "ROUTEIRIZACAO") ? "/modules/roteirizacao" : "/modules/promotores?aba=books";
+}
+
 export default function LoginPage() {
   const { login, isAuthenticated, user, ssoError, appConfig, configLoaded } = useAuth();
   const navigate = useNavigate();
@@ -11,7 +16,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
 
   if (isAuthenticated) {
-    return <Navigate to={user?.role === "ADMIN" ? "/dashboard" : "/modules/roteirizacao"} replace />;
+    return <Navigate to={homeFor(user)} replace />;
   }
 
   if (!configLoaded) {
@@ -24,7 +29,7 @@ export default function LoginPage() {
     try {
       setLoading(true);
       const payload = await login(username);
-      navigate(payload?.user?.role === "ADMIN" ? "/dashboard" : "/modules/roteirizacao", { replace: true });
+      navigate(homeFor(payload?.user), { replace: true });
     } catch (requestError) {
       setError(requestError.message);
     } finally {

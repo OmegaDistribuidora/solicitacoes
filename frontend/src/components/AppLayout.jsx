@@ -6,6 +6,8 @@ import omegaLogo from "../assets/logo.png";
 function roleLabel(role) {
   if (role === "ADMIN") return "Administrador";
   if (role === "ANALYST") return "Analista";
+  if (role === "MERCH_COORDINATOR") return "Coordenador de Merchandising";
+  if (role === "PROMOTER") return "Promotor";
   return "Supervisor";
 }
 

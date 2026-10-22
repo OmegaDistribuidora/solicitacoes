@@ -76,6 +76,10 @@ export async function registerRotaPromotorRoutes(app: FastifyInstance): Promise<
     await requireAuth(request, reply);
     if (reply.sent) return;
     await requireModuleAccess(request, reply, "ROTA_PROMOTOR");
+    if (reply.sent) return;
+    if (request.authUser?.role === "PROMOTER" || request.authUser?.role === "MERCH_COORDINATOR") {
+      reply.code(403).send({ message: "Este perfil possui acesso somente aos books." });
+    }
   });
 
   app.get("/api/modules/rota-promotor/meta", async () => ({ days: VALID_DAYS }));

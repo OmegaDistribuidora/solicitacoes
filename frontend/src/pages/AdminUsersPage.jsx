@@ -12,6 +12,8 @@ function parseCodes(value) {
 function roleLabel(role) {
   if (role === "ADMIN") return "Administrador";
   if (role === "ANALYST") return "Analista";
+  if (role === "MERCH_COORDINATOR") return "Coordenador de Merchandising";
+  if (role === "PROMOTER") return "Promotor";
   return "Supervisor";
 }
 
@@ -56,7 +58,7 @@ function UserModal({ initialUser, onClose, onSave, saving, error }) {
   }
 
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+    <div className="modal-backdrop" role="presentation">
       <section className="modal-card modal-card-sm" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <div>
@@ -81,6 +83,8 @@ function UserModal({ initialUser, onClose, onSave, saving, error }) {
             Perfil
             <select value={form.role} onChange={(event) => updateField("role", event.target.value)}>
               <option value="SUPERVISOR">Supervisor</option>
+              <option value="MERCH_COORDINATOR">Coordenador de Merchandising</option>
+              <option value="PROMOTER">Promotor</option>
               <option value="ANALYST">Analista</option>
               <option value="ADMIN">Administrador</option>
             </select>
