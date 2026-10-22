@@ -62,13 +62,10 @@ export const env = {
     startDate: String(process.env.SOURCE_ROTEIRO_START_DATE || "2026-06-01").trim(),
     endDate: String(process.env.SOURCE_ROTEIRO_END_DATE || "2026-12-31").trim()
   },
-  sourcePromoterRoute: {
-    schema: String(process.env.SOURCE_PROMOTER_ROUTE_SCHEMA || process.env.SOURCE_RCA_SCHEMA || "filial").trim(),
-    table: String(process.env.SOURCE_PROMOTER_ROUTE_TABLE || "dpromotor").trim()
-  },
   omegaApi: {
     url: String(process.env.OMEGA_API_URL || "").trim().replace(/\/$/, ""),
     key: String(process.env.OMEGA_API_KEY || "").trim(),
+    writeKey: String(process.env.OMEGA_API_WRITE_KEY || process.env.OMEGA_API_KEY || "").trim(),
     timeoutMs: Number(process.env.OMEGA_API_TIMEOUT_MS || 10000)
   }
 };

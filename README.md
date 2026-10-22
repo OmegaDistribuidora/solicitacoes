@@ -40,3 +40,9 @@ npm run sync:base-rca
 ```
 
 As datas do backend rodam com `TZ=America/Fortaleza`.
+
+## Promotores
+
+A aba `Promotores / Rota` consulta e altera `filial.dpromotor` imediatamente
+pela API Omega. Inclusoes, edicoes e exclusoes nao dependem de DAG. O codigo do
+cliente deve ser maior que zero e nao pode estar cadastrado em outra rota.

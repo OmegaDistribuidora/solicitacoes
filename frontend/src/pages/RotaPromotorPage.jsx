@@ -22,7 +22,7 @@ function actionLabel(action) {
 }
 
 function statusLabel(status) {
-  if (status === "APPROVED") return "Aguardando aplicacao no Omega";
+  if (status === "APPROVED") return "Aplicando pela API";
   if (status === "REJECTED") return "Recusada";
   if (status === "APPLIED") return "Aplicada";
   if (status === "FAILED") return "Falha na aplicacao";
@@ -42,10 +42,16 @@ function RequestForm({ entry, saving, error, onClose, onSave }) {
 
   function submit(event) {
     event.preventDefault();
+    const clientCode = Number(form.codcli);
+    if (!Number.isInteger(clientCode) || clientCode <= 0) {
+      onSave(null, "O codigo do cliente deve ser um numero inteiro maior que zero.");
+      return;
+    }
     onSave({
       action: entry ? "UPDATE" : "CREATE",
       sourceId: entry?.sourceId,
-      data: { ...form, codcli: Number(form.codcli), dia: form.dia || null, frequencia: form.frequencia || null }
+      expectedUpdatedAt: entry?.sourceUpdatedAt,
+      data: { ...form, codcli: clientCode, dia: form.dia || null, frequencia: form.frequencia || null }
     });
   }
 
@@ -77,7 +83,7 @@ function RequestForm({ entry, saving, error, onClose, onSave }) {
           <label>Observacao<textarea rows={3} value={form.obs} onChange={(event) => update("obs", event.target.value)} /></label>
           {error ? <p className="error-text">{error}</p> : null}
           <div className="modal-actions">
-            <button className="primary-btn" type="submit" disabled={saving}>{saving ? "Enviando..." : "Salvar alteracao"}</button>
+            <button className="primary-btn" type="submit" disabled={saving}>{saving ? "Salvando no Omega..." : "Salvar alteracao"}</button>
             <button className="secondary-btn" type="button" onClick={onClose}>Cancelar</button>
           </div>
         </form>
@@ -116,7 +122,11 @@ export default function RotaPromotorPage() {
 
   useEffect(() => { load(); }, [token, page, appliedQuery]);
 
-  async function saveRequest(payload) {
+  async function saveRequest(payload, validationError = "") {
+    if (!payload) {
+      setFormError(validationError);
+      return;
+    }
     setSaving(true);
     setFormError("");
     try {
@@ -131,10 +141,12 @@ export default function RotaPromotorPage() {
   }
 
   async function requestDelete(entry) {
-    if (!window.confirm(`Excluir a rota de ${entry.codcli} - ${entry.cliente || "cliente"}? A alteracao sera aprovada automaticamente.`)) return;
+    if (!window.confirm(`Excluir imediatamente a rota de ${entry.codcli} - ${entry.cliente || "cliente"} no Omega?`)) return;
     try {
       await apiJson("/modules/rota-promotor/requests", {
-        method: "POST", token, data: { action: "DELETE", sourceId: entry.sourceId }
+        method: "POST",
+        token,
+        data: { action: "DELETE", sourceId: entry.sourceId, expectedUpdatedAt: entry.sourceUpdatedAt }
       });
       await load();
     } catch (requestError) {
@@ -163,7 +175,7 @@ export default function RotaPromotorPage() {
   return (
     <div className="page-stack">
       <section className="page-card compact-page-header">
-        <div className="section-header"><div><div className="eyebrow">Promotores</div><h2>Rotas</h2><p className="muted">Inclusoes, alteracoes e exclusoes sao aprovadas automaticamente e aplicadas no Omega pela sincronizacao.</p></div><button className="primary-btn" onClick={() => setEditing(null)}>Nova rota</button></div>
+        <div className="section-header"><div><div className="eyebrow">Promotores</div><h2>Rotas</h2><p className="muted">Inclusoes, alteracoes e exclusoes sao validadas e aplicadas imediatamente no Omega pela API.</p></div><button className="primary-btn" onClick={() => setEditing(null)}>Nova rota</button></div>
         {error ? <p className="error-text">{error}</p> : null}
       </section>
       <section className="table-card">
@@ -172,7 +184,7 @@ export default function RotaPromotorPage() {
         {!entries.length ? <div className="empty-state">Nenhuma rota encontrada.</div> : null}
         <div className="pagination-bar"><button className="secondary-btn compact-btn" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Anterior</button><span>Pagina {page} de {pageInfo.totalPages}</span><button className="secondary-btn compact-btn" disabled={page >= pageInfo.totalPages} onClick={() => setPage((current) => current + 1)}>Proxima</button></div>
       </section>
-      <section className="table-card"><h2>Alteracoes aguardando sincronizacao</h2>{activeRequests.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>Acao</th><th>Promotor</th><th>Cliente</th><th>Rota</th><th>Solicitante</th><th>Status</th></tr></thead><tbody>{requestRows(activeRequests)}</tbody></table></div> : <div className="empty-state">Nenhuma alteracao aguardando sincronizacao.</div>}</section>
+      <section className="table-card"><h2>Alteracoes em processamento</h2>{activeRequests.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>Acao</th><th>Promotor</th><th>Cliente</th><th>Rota</th><th>Solicitante</th><th>Status</th></tr></thead><tbody>{requestRows(activeRequests)}</tbody></table></div> : <div className="empty-state">Nenhuma alteracao em processamento.</div>}</section>
       <section className="table-card"><h2>Historico</h2>{historyRequests.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>Acao</th><th>Promotor</th><th>Cliente</th><th>Rota</th><th>Solicitante</th><th>Status</th></tr></thead><tbody>{requestRows(historyRequests)}</tbody></table></div> : <div className="empty-state">Nenhuma alteracao concluida.</div>}</section>
       {editing !== undefined ? <RequestForm entry={editing} saving={saving} error={formError} onClose={() => { setEditing(undefined); setFormError(""); }} onSave={saveRequest} /> : null}
     </div>

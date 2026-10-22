@@ -28,7 +28,7 @@ export default function DashboardPage() {
           ["Rotas cadastradas", data?.entries ?? "-"],
           ["Solicitacoes pendentes", data?.pendingRequests ?? "-"],
           ["Rotas de promotor", data?.promoterRoutes ?? "-"],
-          ["Alteracoes aguardando sincronizacao", data?.pendingPromoterRequests ?? "-"],
+          ["Alteracoes de promotor em processamento", data?.pendingPromoterRequests ?? "-"],
           ["Books", data?.books ?? "-"]
         ].map(([label, value]) => (
           <div className="stat-card" key={label}>
