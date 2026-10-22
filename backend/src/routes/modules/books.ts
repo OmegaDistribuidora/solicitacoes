@@ -192,7 +192,11 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
           workflow: true,
           criadoPor: { select: { id: true, displayName: true } },
           anexos: { where: { tipo: "CAPA" }, take: 1, orderBy: { criadoEm: "desc" } },
-          _count: { select: { registros: true, anexos: true, envios: true } }
+          _count: {
+            select: authUser.role === "PROMOTER"
+              ? { envios: { where: { promotorUserId: authUser.userId } } }
+              : { registros: true, anexos: true, envios: true }
+          }
         }
       })
     ]);
@@ -203,10 +207,26 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
     const authUser = request.authUser!;
     const id = Number((request.params as { id: string }).id);
     if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ message: "Book invalido." });
+    const ownAcceptedRecordIds = authUser.role === "PROMOTER"
+      ? (await prisma.bookSubmission.findMany({
+          where: {
+            bookId: id,
+            promotorUserId: authUser.userId,
+            status: "ACCEPTED",
+            registroBookId: { not: null }
+          },
+          select: { registroBookId: true }
+        })).flatMap((submission) => submission.registroBookId === null ? [] : [submission.registroBookId])
+      : null;
     const book = await prisma.book.findUnique({
       where: { id },
       include: {
         ...bookInclude,
+        registros: {
+          ...(ownAcceptedRecordIds ? { where: { id: { in: ownAcceptedRecordIds } } } : {}),
+          orderBy: [{ ordem: "asc" }, { id: "asc" }],
+          include: { anexos: { orderBy: { criadoEm: "asc" } } }
+        },
         envios: {
           where: authUser.role === "PROMOTER" ? { promotorUserId: authUser.userId } : undefined,
           orderBy: { criadoEm: "desc" },

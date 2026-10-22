@@ -7,7 +7,7 @@ import RotaPromotorPage from "./RotaPromotorPage";
 export default function PromotoresPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
-  const booksOnly = user?.role === "PROMOTER" || user?.role === "MERCH_COORDINATOR";
+  const booksOnly = user?.role === "PROMOTER";
   const tab = booksOnly || searchParams.get("aba") === "books" ? "books" : "rota";
   const routePageRef = useRef(null);
   const booksPageRef = useRef(null);
@@ -16,7 +16,7 @@ export default function PromotoresPage() {
   return (
     <div className="page-stack">
       <section className="page-card promoter-module-header">
-        <div><div className="eyebrow">Merchandising</div><h1>Promotores</h1><p className="muted">{booksOnly ? (user?.role === "PROMOTER" ? "Envie seus registros para os books ativos." : "Crie, acompanhe e finalize os books de execução nas lojas.") : "Gerencie as rotas dos promotores e os books de execução nas lojas."}</p></div>
+        <div><div className="eyebrow">Merchandising</div><h1>Promotores</h1><p className="muted">{booksOnly ? "Envie seus registros para os books ativos." : "Gerencie as rotas dos promotores e os books de execução nas lojas."}</p></div>
         <div className="promoter-header-actions">
           <div className="segmented promoter-tabs" role="tablist">
             {!booksOnly ? <button type="button" className={tab === "rota" ? "is-active" : ""} onClick={() => setSearchParams({ aba: "rota" })}>Rota</button> : null}
