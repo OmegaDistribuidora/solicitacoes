@@ -5,6 +5,7 @@ import prisma from "../../lib/prisma";
 import { recordAudit } from "../../lib/audit";
 import { requireAuth, requireModuleAccess, requirePromoterRouteReviewer } from "../../lib/security";
 import { nowFortaleza } from "../../lib/dates";
+import { listPromoterRoutes, OmegaApiError } from "../../lib/omegaApi";
 
 const VALID_DAYS = [
   "Segunda-Feira",
@@ -95,35 +96,19 @@ export async function registerRotaPromotorRoutes(app: FastifyInstance): Promise<
 
   app.get("/api/modules/rota-promotor/meta", async () => ({ days: VALID_DAYS }));
 
-  app.get("/api/modules/rota-promotor/entries", async (request) => {
+  app.get("/api/modules/rota-promotor/entries", async (request, reply) => {
     const query = request.query as Record<string, string | undefined>;
     const q = String(query.q || "").trim();
     const page = Math.max(1, Number(query.page || 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(query.pageSize || 30) || 30));
-    const numericQuery = Number(q);
-    const where: any = q
-      ? {
-          OR: [
-            { promotor: { contains: q, mode: "insensitive" } },
-            { cliente: { contains: q, mode: "insensitive" } },
-            { areaatuacao: { contains: q, mode: "insensitive" } },
-            { codpromotor: { contains: q, mode: "insensitive" } },
-            { codcli: Number.isInteger(numericQuery) ? numericQuery : -1 }
-          ]
-        }
-      : {};
-
-    const [total, entries] = await Promise.all([
-      prisma.promoterRouteEntry.count({ where }),
-      prisma.promoterRouteEntry.findMany({
-        where,
-        orderBy: [{ promotor: "asc" }, { cliente: "asc" }, { dia: "asc" }],
-        skip: (page - 1) * pageSize,
-        take: pageSize
-      })
-    ]);
-
-    return { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)), entries };
+    try {
+      return await listPromoterRoutes({ page, pageSize, query: q });
+    } catch (error) {
+      if (error instanceof OmegaApiError) {
+        return reply.code(error.statusCode).send({ message: error.message });
+      }
+      throw error;
+    }
   });
 
   app.get("/api/modules/rota-promotor/requests", async (request, reply) => {

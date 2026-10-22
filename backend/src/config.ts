@@ -65,5 +65,10 @@ export const env = {
   sourcePromoterRoute: {
     schema: String(process.env.SOURCE_PROMOTER_ROUTE_SCHEMA || process.env.SOURCE_RCA_SCHEMA || "filial").trim(),
     table: String(process.env.SOURCE_PROMOTER_ROUTE_TABLE || "dpromotor").trim()
+  },
+  omegaApi: {
+    url: String(process.env.OMEGA_API_URL || "").trim().replace(/\/$/, ""),
+    key: String(process.env.OMEGA_API_KEY || "").trim(),
+    timeoutMs: Number(process.env.OMEGA_API_TIMEOUT_MS || 10000)
   }
 };
