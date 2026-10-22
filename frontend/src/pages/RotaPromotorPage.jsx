@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { apiJson } from "../services/api";
 
@@ -91,7 +91,7 @@ function RequestForm({ entry, saving, error, onClose, onSave }) {
     </div>
   );
 }
-export default function RotaPromotorPage() {
+const RotaPromotorPage = forwardRef(function RotaPromotorPage(_, ref) {
   const { token } = useAuth();
   const [entries, setEntries] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -103,6 +103,12 @@ export default function RotaPromotorPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
+
+  useImperativeHandle(ref, () => ({
+    openCreate() {
+      setEditing(null);
+    }
+  }), []);
 
   async function load(nextPage = page, nextQuery = appliedQuery) {
     setError("");
@@ -154,7 +160,6 @@ export default function RotaPromotorPage() {
     }
   }
 
-  const activeRequests = requests.filter((item) => ["PENDING", "APPROVED"].includes(item.status));
   const historyRequests = requests.filter((item) => !["PENDING", "APPROVED"].includes(item.status));
 
   function requestRows(items) {
@@ -174,19 +179,17 @@ export default function RotaPromotorPage() {
 
   return (
     <div className="page-stack">
-      <section className="page-card compact-page-header">
-        <div className="section-header"><div><div className="eyebrow">Promotores</div><h2>Rotas</h2><p className="muted">Inclusoes, alteracoes e exclusoes sao validadas e aplicadas imediatamente no Omega pela API.</p></div><button className="primary-btn" onClick={() => setEditing(null)}>Nova rota</button></div>
-        {error ? <p className="error-text">{error}</p> : null}
-      </section>
       <section className="table-card">
-        <div className="toolbar"><div><h2>Rotas atuais</h2><p className="muted small">{pageInfo.total} linha(s) consultadas diretamente no Omega.</p></div><div className="inline-actions"><input placeholder="Promotor, cliente ou codigo" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { setPage(1); setAppliedQuery(query); } }} /><button className="secondary-btn" onClick={() => { setPage(1); setAppliedQuery(query); }}>Buscar</button></div></div>
+        <div className="toolbar"><h2>Rotas atuais</h2><div className="inline-actions"><input placeholder="Promotor, cliente ou codigo" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { setPage(1); setAppliedQuery(query); } }} /><button className="secondary-btn" onClick={() => { setPage(1); setAppliedQuery(query); }}>Buscar</button></div></div>
+        {error ? <p className="error-text">{error}</p> : null}
         <div className="table-wrap"><table><thead><tr><th>Promotor</th><th>Cliente</th><th>Area</th><th>Frequencia</th><th>Dia</th><th>Status</th><th>Acoes</th></tr></thead><tbody>{entries.map((entry) => <tr key={entry.sourceId}><td>{entry.codpromotor ? `${entry.codpromotor} - ` : ""}{entry.promotor || "-"}</td><td>{entry.codcli} - {entry.cliente || "-"}</td><td>{entry.areaatuacao || "-"}</td><td>{entry.frequencia || "-"}</td><td>{entry.dia || "-"}</td><td>{entry.status || "-"}</td><td><div className="inline-actions"><button className="secondary-btn compact-btn" onClick={() => setEditing(entry)}>Editar</button><button className="danger-btn compact-btn" onClick={() => requestDelete(entry)}>Excluir</button></div></td></tr>)}</tbody></table></div>
         {!entries.length ? <div className="empty-state">Nenhuma rota encontrada.</div> : null}
         <div className="pagination-bar"><button className="secondary-btn compact-btn" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Anterior</button><span>Pagina {page} de {pageInfo.totalPages}</span><button className="secondary-btn compact-btn" disabled={page >= pageInfo.totalPages} onClick={() => setPage((current) => current + 1)}>Proxima</button></div>
       </section>
-      <section className="table-card"><h2>Alteracoes em processamento</h2>{activeRequests.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>Acao</th><th>Promotor</th><th>Cliente</th><th>Rota</th><th>Solicitante</th><th>Status</th></tr></thead><tbody>{requestRows(activeRequests)}</tbody></table></div> : <div className="empty-state">Nenhuma alteracao em processamento.</div>}</section>
       <section className="table-card"><h2>Historico</h2>{historyRequests.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>Acao</th><th>Promotor</th><th>Cliente</th><th>Rota</th><th>Solicitante</th><th>Status</th></tr></thead><tbody>{requestRows(historyRequests)}</tbody></table></div> : <div className="empty-state">Nenhuma alteracao concluida.</div>}</section>
       {editing !== undefined ? <RequestForm entry={editing} saving={saving} error={formError} onClose={() => { setEditing(undefined); setFormError(""); }} onSave={saveRequest} /> : null}
     </div>
   );
-}
+});
+
+export default RotaPromotorPage;

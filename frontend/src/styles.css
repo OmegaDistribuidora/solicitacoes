@@ -362,8 +362,8 @@ h3 {
 
 .compact-page-header,
 .promoter-module-header {
-  min-height: 138px;
-  padding: clamp(24px, 3vw, 38px);
+  min-height: 104px;
+  padding: clamp(19px, 2.2vw, 28px);
   color: white;
   border: none;
   background:
@@ -373,15 +373,7 @@ h3 {
 
 .compact-page-header::before,
 .promoter-module-header::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: clamp(30px, 8vw, 120px);
-  width: 18px;
-  height: 100%;
-  background: var(--orange);
-  transform: skewX(-16deg);
-  box-shadow: 34px 0 0 var(--amber), 68px 0 0 rgba(255, 255, 255, 0.1);
+  content: none;
 }
 
 .compact-page-header > *,
@@ -1347,7 +1339,7 @@ h3 {
 
 .promoter-module-header {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 18px;
   flex-wrap: wrap;
@@ -1375,6 +1367,17 @@ h3 {
   color: var(--navy-950);
   border-color: var(--amber);
   background: var(--amber);
+}
+
+.promoter-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.promoter-new-route {
+  white-space: nowrap;
 }
 
 .book-grid {
@@ -1666,13 +1669,25 @@ h3 {
   .compact-page-header,
   .promoter-module-header {
     min-height: 0;
-    padding: 24px 20px;
+    padding: 20px;
   }
 
   .compact-page-header::before,
   .promoter-module-header::before {
-    right: 28px;
-    opacity: 0.34;
+    content: none;
+  }
+
+  .promoter-header-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .promoter-header-actions .segmented {
+    flex: 1;
+  }
+
+  .promoter-header-actions .segmented button {
+    flex: 1;
   }
 
   .modal-backdrop {
