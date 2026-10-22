@@ -110,8 +110,17 @@ function SubmissionForm({ book, token, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  function addPhotos(type, files) {
-    setPhotos((current) => [...current, ...Array.from(files).map((file) => ({ key: crypto.randomUUID(), file, type }))]);
+  function addPhotos(type, fileList) {
+    const selectedFiles = Array.from(fileList || []);
+    if (!selectedFiles.length) return;
+    const invalidFile = selectedFiles.find((file) => !["image/png", "image/jpeg"].includes(file.type));
+    if (invalidFile) {
+      setError(`O arquivo "${invalidFile.name}" não é PNG ou JPEG/JPG.`);
+      return;
+    }
+    const additions = selectedFiles.map((file) => ({ key: crypto.randomUUID(), file, type }));
+    setPhotos((current) => [...current, ...additions]);
+    setError("");
   }
 
   async function submit(event) {
@@ -139,8 +148,8 @@ function SubmissionForm({ book, token, onClose, onSaved }) {
         <form className="form-stack" onSubmit={submit}>
           <label>Código do cliente<input required type="number" min="1" step="1" value={codigoCliente} onChange={(event) => setCodigoCliente(event.target.value)} /></label>
           <div className="photo-upload-grid">
-            <label className="file-drop"><strong>Fotos de Frente de Loja</strong><input type="file" multiple accept="image/png,image/jpeg" onChange={(event) => { addPhotos("FRENTE_LOJA", event.target.files || []); event.target.value = ""; }} /><span>Adicionar fotos</span></label>
-            <label className="file-drop"><strong>Fotos de Ação</strong><input type="file" multiple accept="image/png,image/jpeg" onChange={(event) => { addPhotos("ACAO", event.target.files || []); event.target.value = ""; }} /><span>Adicionar fotos</span></label>
+            <label className="file-drop"><strong>Fotos de Frente de Loja</strong><input type="file" multiple accept=".png,.jpg,.jpeg,image/png,image/jpeg" onClick={(event) => { event.currentTarget.value = ""; }} onChange={(event) => { const files = Array.from(event.currentTarget.files || []); addPhotos("FRENTE_LOJA", files); event.currentTarget.value = ""; }} /><span>Adicionar fotos</span></label>
+            <label className="file-drop"><strong>Fotos de Ação</strong><input type="file" multiple accept=".png,.jpg,.jpeg,image/png,image/jpeg" onClick={(event) => { event.currentTarget.value = ""; }} onChange={(event) => { const files = Array.from(event.currentTarget.files || []); addPhotos("ACAO", files); event.currentTarget.value = ""; }} /><span>Adicionar fotos</span></label>
           </div>
           {photos.length ? <div className="new-photo-list">{photos.map((photo) => <div className="mini-row" key={photo.key}><span>{photo.file.name}</span><strong>{photoTypeLabel(photo.type)}</strong><button type="button" className="danger-btn compact-btn" onClick={() => setPhotos((current) => current.filter((item) => item.key !== photo.key))}>Remover</button></div>)}</div> : null}
           {error ? <p className="error-text">{error}</p> : null}
@@ -167,7 +176,7 @@ function BookDetails({ book, role, busy, error, onClose, onEdit, onDelete, onSub
 
         {canManage && pendingSubmissions.length ? <section className="workflow-section"><div className="section-header"><div><h3>Registros aguardando aprovação</h3><p className="muted small">Confira cliente, promotor e fotos antes de aceitar.</p></div><span className="status-pill status-pending">{pendingSubmissions.length} pendente(s)</span></div><div className="book-record-list">{pendingSubmissions.map((submission) => <section className="book-record-card submission-card" key={submission.id}><div className="section-header"><div><div className="eyebrow">Envio #{submission.id}</div><h3>{submission.codigoCliente} · {submission.promotorNome}</h3></div><div className="inline-actions"><button className="primary-btn compact-btn" disabled={busy} onClick={() => onReviewSubmission(submission, "ACCEPTED")}>Aceitar</button><button className="danger-btn compact-btn" disabled={busy} onClick={() => onReviewSubmission(submission, "REJECTED")}>Recusar</button></div></div><div className="book-photo-grid">{submission.anexos?.map((photo) => <a className="book-photo" href={photo.url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.url} alt={photo.nomeOriginal} /><figcaption>{photoTypeLabel(photo.tipo)}</figcaption></a>)}</div></section>)}</div></section> : null}
 
-        <section className="workflow-section"><div className="section-header"><div><h3>Registros aceitos</h3><p className="muted small">Estes registros compõem o book e permanecem disponíveis no Power BI.</p></div><strong>{book.registros?.length || 0}</strong></div><div className="book-record-list">{book.registros?.length ? book.registros.map((record, index) => <section className="book-record-card" key={record.id}><div className="section-header"><h3>{index + 1}. {record.codigoCliente} · {record.promotor}</h3>{canManage && book.registros.length > 1 ? <div className="order-controls"><button type="button" className="secondary-btn compact-btn" disabled={busy || index === 0} onClick={() => onMoveRecord(index, -1)}>↑</button><button type="button" className="secondary-btn compact-btn" disabled={busy || index === book.registros.length - 1} onClick={() => onMoveRecord(index, 1)}>↓</button></div> : null}</div><div className="book-photo-grid">{record.anexos?.map((photo) => <a className="book-photo" href={photo.url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.url} alt={photo.nomeOriginal} /><figcaption>{photoTypeLabel(photo.tipo)}</figcaption></a>)}</div></section>) : <div className="empty-state">Nenhum registro aceito ainda.</div>}</div></section>
+        <section className="workflow-section"><div className="book-record-list">{book.registros?.length ? book.registros.map((record, index) => <section className="book-record-card" key={record.id}><div className="section-header"><h3>{index + 1}. {record.codigoCliente} · {record.promotor}</h3>{canManage && book.registros.length > 1 ? <div className="order-controls"><button type="button" className="secondary-btn compact-btn" disabled={busy || index === 0} onClick={() => onMoveRecord(index, -1)}>↑</button><button type="button" className="secondary-btn compact-btn" disabled={busy || index === book.registros.length - 1} onClick={() => onMoveRecord(index, 1)}>↓</button></div> : null}</div><div className="book-photo-grid">{record.anexos?.map((photo) => <a className="book-photo" href={photo.url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.url} alt={photo.nomeOriginal} /><figcaption>{photoTypeLabel(photo.tipo)}</figcaption></a>)}</div></section>) : <div className="empty-state">Nenhum registro aceito ainda.</div>}</div></section>
 
         {isPromoter && book.envios?.length ? <section className="workflow-section"><h3>Meus envios</h3><div className="submission-history">{book.envios.map((submission) => <div className="mini-row" key={submission.id}><span>Cliente {submission.codigoCliente}</span><strong>{submissionStatusLabel(submission.status)}</strong>{submission.motivoRevisao ? <small>{submission.motivoRevisao}</small> : null}</div>)}</div></section> : null}
 
