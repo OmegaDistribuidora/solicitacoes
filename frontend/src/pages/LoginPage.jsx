@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../components/AuthProvider";
+import omegaLogo from "../assets/logo.png";
 
 export default function LoginPage() {
   const { login, isAuthenticated, user, ssoError, appConfig, configLoaded } = useAuth();
@@ -34,9 +35,15 @@ export default function LoginPage() {
   return (
     <div className="login-screen">
       <div className="login-panel">
-        <div className="eyebrow">Omega Distribuidora</div>
-        <h1>{appConfig.systemName || "Solicitacoes Trade"}</h1>
-        <p className="muted">Central de solicitacoes dos modulos Trade</p>
+        <div className="login-brand">
+          <span className="login-logo-frame"><img src={omegaLogo} alt="Omega" /></span>
+          <span><div className="eyebrow">Omega Distribuidora</div><strong>Operacao comercial</strong></span>
+        </div>
+        <div className="login-heading">
+          <span className="login-sequence" aria-hidden="true">01 / ACESSO</span>
+          <h1>{appConfig.systemName || "Solicitacoes Trade"}</h1>
+          <p className="muted">Central de solicitacoes dos modulos Trade</p>
+        </div>
 
         {!appConfig.allowLocalLogin ? (
           <div className="callout-card">

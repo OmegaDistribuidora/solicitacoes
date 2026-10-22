@@ -18,14 +18,17 @@ export default function AppLayout() {
     const hasAllModules = user?.role === "ADMIN" || user?.role === "ANALYST";
     const items = [];
     if (hasAllModules || modules.includes("ROTEIRIZACAO")) {
-      items.push({ to: "/modules/roteirizacao", label: "Roteirizacao" });
+      items.push({ to: "/modules/roteirizacao", label: "Roteirizacao", code: "RT" });
     }
     if (hasAllModules || modules.includes("ROTA_PROMOTOR")) {
-      items.push({ to: "/modules/promotores", label: "Promotores" });
+      items.push({ to: "/modules/promotores", label: "Promotores", code: "PM" });
     }
     if (user?.role === "ADMIN") {
-      items.unshift({ to: "/dashboard", label: "Inicio" });
-      items.push({ to: "/admin/users", label: "Usuarios" }, { to: "/admin/audit", label: "Auditoria" });
+      items.unshift({ to: "/dashboard", label: "Inicio", code: "IN" });
+      items.push(
+        { to: "/admin/users", label: "Usuarios", code: "US" },
+        { to: "/admin/audit", label: "Auditoria", code: "AU" }
+      );
     }
     return items;
   }, [user?.role, user?.modules]);
@@ -47,7 +50,8 @@ export default function AppLayout() {
         <div className="brand-card">
           <NavLink to="/" className="brand-link">
             <img src={omegaLogo} alt="Omega" className="brand-logo-image" />
-            <span>
+            <span className="brand-copy">
+              <small className="brand-kicker">Central Trade</small>
               <strong>Solicitacoes Trade</strong>
               <small>Omega Distribuidora</small>
             </span>
@@ -57,15 +61,19 @@ export default function AppLayout() {
         <nav className="nav-stack">
           {navigationItems.map((item) => (
             <NavLink key={item.to} to={item.to} className="nav-link" end={item.to === "/dashboard"}>
-              {item.label}
+              <span className="nav-code" aria-hidden="true">{item.code}</span>
+              <span>{item.label}</span>
             </NavLink>
           ))}
         </nav>
 
         <div className="sidebar-foot">
-          <div>
+          <div className="profile-block">
+            <span className="profile-monogram" aria-hidden="true">{user?.displayName?.trim()?.charAt(0)?.toUpperCase() || "O"}</span>
+            <span>
             <strong>{user?.displayName}</strong>
             <div className="muted small">{profileLabel}</div>
+            </span>
           </div>
           <button type="button" className="primary-btn ghost-btn" onClick={handleLogout}>
             Sair
