@@ -3,31 +3,18 @@ import { z } from "zod";
 import prisma from "../lib/prisma";
 import { recordAudit } from "../lib/audit";
 import { requireAdmin, requireAuth, signToken } from "../lib/security";
-import { normalizeCodes, normalizeUsername, serializeUser } from "../lib/users";
+import { normalizeUsername, serializeUser } from "../lib/users";
 
 const userSchema = z.object({
   username: z.string().min(2),
   displayName: z.string().min(2),
   role: z.enum(["ADMIN", "ANALYST", "SUPERVISOR", "MERCH_COORDINATOR", "PROMOTER"]),
   active: z.boolean().default(true),
-  routeirizacao: z
-    .object({
-      enabled: z.boolean().default(false),
-      supervisorCodes: z.array(z.coerce.number().int().positive()).default([])
-    })
-    .default({ enabled: false, supervisorCodes: [] }),
   rotaPromotor: z.object({ enabled: z.boolean().default(false) }).default({ enabled: false })
 });
 
 async function countActiveAdmins(): Promise<number> {
   return prisma.user.count({ where: { role: "ADMIN", active: true } });
-}
-
-function validateAccess(data: z.infer<typeof userSchema>): string | null {
-  if (data.role === "SUPERVISOR" && data.routeirizacao.enabled && !data.routeirizacao.supervisorCodes.length) {
-    return "Informe ao menos um codigo de supervisor para roteirizacao.";
-  }
-  return null;
 }
 
 export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
@@ -43,14 +30,10 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
     const parsed = userSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ message: "Dados do usuario invalidos." });
 
-    const validationError = validateAccess(parsed.data);
-    if (validationError) return reply.code(400).send({ message: validationError });
-
     const username = normalizeUsername(parsed.data.username);
     const existing = await prisma.user.findUnique({ where: { username } });
     if (existing) return reply.code(409).send({ message: "Ja existe um usuario com esse login." });
 
-    const routeCodes = normalizeCodes(parsed.data.routeirizacao.supervisorCodes);
     const user = await prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
@@ -61,14 +44,9 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
           moduleAccesses:
             parsed.data.role === "SUPERVISOR"
               ? {
-                  create: [
-                    ...(parsed.data.routeirizacao.enabled
-                      ? [{ module: "ROUTEIRIZACAO" as const, supervisorCodes: routeCodes }]
-                      : []),
-                    ...(parsed.data.rotaPromotor.enabled
-                      ? [{ module: "ROTA_PROMOTOR" as const, supervisorCodes: [] }]
-                      : [])
-                  ]
+                  create: parsed.data.rotaPromotor.enabled
+                    ? [{ module: "ROTA_PROMOTOR" as const, supervisorCodes: [] }]
+                    : []
                 }
               : undefined
         },
@@ -100,9 +78,6 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
     const parsed = userSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ message: "Dados do usuario invalidos." });
 
-    const validationError = validateAccess(parsed.data);
-    if (validationError) return reply.code(400).send({ message: validationError });
-
     const current = await prisma.user.findUnique({ where: { id: userId }, include: { moduleAccesses: true } });
     if (!current) return reply.code(404).send({ message: "Usuario nao encontrado." });
 
@@ -121,8 +96,6 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const beforeSnapshot = serializeUser(current);
-    const routeCodes = normalizeCodes(parsed.data.routeirizacao.supervisorCodes);
-
     const updated = await prisma.$transaction(async (tx) => {
       await tx.userModuleAccess.deleteMany({ where: { userId } });
 
@@ -136,14 +109,9 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
           moduleAccesses:
             parsed.data.role === "SUPERVISOR"
               ? {
-                  create: [
-                    ...(parsed.data.routeirizacao.enabled
-                      ? [{ module: "ROUTEIRIZACAO" as const, supervisorCodes: routeCodes }]
-                      : []),
-                    ...(parsed.data.rotaPromotor.enabled
-                      ? [{ module: "ROTA_PROMOTOR" as const, supervisorCodes: [] }]
-                      : [])
-                  ]
+                  create: parsed.data.rotaPromotor.enabled
+                    ? [{ module: "ROTA_PROMOTOR" as const, supervisorCodes: [] }]
+                    : []
                 }
               : undefined
         },

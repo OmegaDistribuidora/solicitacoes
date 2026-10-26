@@ -9,11 +9,7 @@
     "start": "node scripts/ensure-build.cjs && prisma db push --skip-generate && node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
-    "import:routing": "tsx scripts/import-routing-from-excel.ts",
-    "sync:base-rca": "tsx scripts/sync-base-rca.ts",
     "solicitacoes-trade:criar-froteirizacao-local": "tsx scripts/dag-solicitacoes-trade-criar-froteirizacao-local.ts",
-    "dag:solicitacoes-trade:atualizar-base-rca": "tsx scripts/dag-solicitacoes-trade-atualizar-base-rca.ts",
-    "dag:solicitacoes-trade:atualizar-roteirizacao": "tsx scripts/dag-solicitacoes-trade-atualizar-roteirizacao.ts",
     "dag:solicitacoes-trade:atualizar-froteiro": "tsx scripts/dag-solicitacoes-trade-atualizar-froteiro.ts"
   },
   "dependencies": {

@@ -19,9 +19,6 @@ export default function AppLayout() {
     const modules = user?.modules?.map((item) => item.module) || [];
     const hasAllModules = user?.role === "ADMIN" || user?.role === "ANALYST";
     const items = [];
-    if (hasAllModules || modules.includes("ROTEIRIZACAO")) {
-      items.push({ to: "/modules/roteirizacao", label: "Roteirizacao", code: "RT" });
-    }
     if (hasAllModules || modules.includes("ROTA_PROMOTOR")) {
       items.push({ to: "/modules/promotores", label: "Promotores", code: "PM" });
     }
@@ -35,11 +32,7 @@ export default function AppLayout() {
     return items;
   }, [user?.role, user?.modules]);
 
-  const routeCodes = user?.routeSupervisorCodes || [];
-  const profileLabel =
-    user?.role === "SUPERVISOR" && routeCodes.length
-      ? `Supervisor ${routeCodes.join(", ")}`
-      : roleLabel(user?.role);
+  const profileLabel = roleLabel(user?.role);
 
   function handleLogout() {
     logout();

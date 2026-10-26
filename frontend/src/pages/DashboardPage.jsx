@@ -24,11 +24,7 @@ export default function DashboardPage() {
       <section className="stats-grid">
         {[
           ["Usuarios ativos", data?.users ?? "-"],
-          ["RCAs na base", data?.rcas ?? "-"],
-          ["Rotas cadastradas", data?.entries ?? "-"],
-          ["Solicitacoes pendentes", data?.pendingRequests ?? "-"],
           ["Rotas de promotor", data?.promoterRoutes ?? "-"],
-          ["Alteracoes de promotor em processamento", data?.pendingPromoterRequests ?? "-"],
           ["Books", data?.books ?? "-"]
         ].map(([label, value]) => (
           <div className="stat-card" key={label}>

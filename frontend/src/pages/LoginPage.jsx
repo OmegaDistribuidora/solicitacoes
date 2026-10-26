@@ -5,7 +5,7 @@ import omegaLogo from "../assets/logo.png";
 
 function homeFor(user) {
   if (user?.role === "ADMIN") return "/dashboard";
-  return user?.modules?.some((item) => item.module === "ROUTEIRIZACAO") ? "/modules/roteirizacao" : "/modules/promotores?aba=books";
+  return "/";
 }
 
 export default function LoginPage() {

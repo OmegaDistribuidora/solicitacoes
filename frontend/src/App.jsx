@@ -6,7 +6,6 @@ import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import AuditPage from "./pages/AuditPage";
-import RoteirizacaoPage from "./pages/RoteirizacaoPage";
 import PromotoresPage from "./pages/PromotoresPage";
 import { useAuth } from "./components/AuthProvider";
 
@@ -14,7 +13,9 @@ function HomeRedirectPage() {
   const { user } = useAuth();
   if (user?.role === "ADMIN") return <Navigate to="/dashboard" replace />;
   const modules = user?.modules?.map((item) => item.module) || [];
-  return <Navigate to={modules.includes("ROTEIRIZACAO") ? "/modules/roteirizacao" : "/modules/promotores"} replace />;
+  const canAccessPromoters = user?.role === "ANALYST" || user?.role === "MERCH_COORDINATOR" || user?.role === "PROMOTER" || modules.includes("ROTA_PROMOTOR");
+  if (canAccessPromoters) return <Navigate to="/modules/promotores" replace />;
+  return <section className="page-card compact-page-header"><div className="eyebrow">Acesso</div><h1>Nenhum módulo disponível</h1><p className="muted">Solicite ao administrador acesso ao módulo Promotores.</p></section>;
 }
 
 function ModuleRoute({ module, children }) {
@@ -45,7 +46,6 @@ export default function App() {
             </AdminRoute>
           }
         />
-        <Route path="modules/roteirizacao" element={<ModuleRoute module="ROUTEIRIZACAO"><RoteirizacaoPage /></ModuleRoute>} />
         <Route path="modules/promotores" element={<ModuleRoute module="ROTA_PROMOTOR"><PromotoresPage /></ModuleRoute>} />
         <Route path="modules/rota-promotor" element={<Navigate to="/modules/promotores?aba=rota" replace />} />
         <Route

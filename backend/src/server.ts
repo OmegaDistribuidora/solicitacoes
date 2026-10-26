@@ -11,7 +11,6 @@ import { registerAuthRoutes } from "./routes/auth";
 import { registerUserRoutes } from "./routes/users";
 import { registerAuditRoutes } from "./routes/audit";
 import { registerDashboardRoutes } from "./routes/dashboard";
-import { registerRoteirizacaoRoutes } from "./routes/modules/roteirizacao";
 import { registerRotaPromotorRoutes } from "./routes/modules/rotaPromotor";
 import { registerBookRoutes } from "./routes/modules/books";
 import type { AuthUser } from "./types";
@@ -42,7 +41,6 @@ async function bootstrap(): Promise<void> {
   await registerUserRoutes(app);
   await registerAuditRoutes(app);
   await registerDashboardRoutes(app);
-  await registerRoteirizacaoRoutes(app);
   await registerRotaPromotorRoutes(app);
   await registerBookRoutes(app);
 

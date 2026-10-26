@@ -1,13 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { apiJson } from "../services/api";
-
-function parseCodes(value) {
-  return String(value || "")
-    .split(/[\s,;]+/)
-    .map((item) => Number(item.trim()))
-    .filter((item, index, list) => Number.isInteger(item) && item > 0 && list.indexOf(item) === index);
-}
 
 function roleLabel(role) {
   if (role === "ADMIN") return "Administrador";
@@ -23,19 +16,12 @@ function UserModal({ initialUser, onClose, onSave, saving, error }) {
     displayName: initialUser?.displayName || "",
     username: initialUser?.username || "",
     role: initialUser?.role || "SUPERVISOR",
-    routeEnabled:
-      initialUser?.role === "ADMIN" || initialUser?.role === "ANALYST"
-        ? true
-        : Boolean(initialUser?.modules?.some((item) => item.module === "ROUTEIRIZACAO")),
-    routeCodes: initialUser?.routeSupervisorCodes?.join(", ") || "",
     promoterRouteEnabled:
       initialUser?.role === "ADMIN" || initialUser?.role === "ANALYST"
         ? true
         : Boolean(initialUser?.promoterRouteEnabled),
     active: initialUser?.active ?? true
   });
-  const parsedCodes = useMemo(() => parseCodes(form.routeCodes), [form.routeCodes]);
-
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
   }
@@ -47,10 +33,6 @@ function UserModal({ initialUser, onClose, onSave, saving, error }) {
       username: form.username,
       role: form.role,
       active: Boolean(form.active),
-      routeirizacao: {
-        enabled: form.role === "ADMIN" || form.role === "ANALYST" ? true : Boolean(form.routeEnabled),
-        supervisorCodes: form.role === "SUPERVISOR" ? parsedCodes : []
-      },
       rotaPromotor: {
         enabled: form.role === "ADMIN" || form.role === "ANALYST" ? true : Boolean(form.promoterRouteEnabled)
       }
@@ -91,23 +73,6 @@ function UserModal({ initialUser, onClose, onSave, saving, error }) {
           </label>
           {form.role === "SUPERVISOR" ? (
             <>
-              <label className="inline-check">
-                <input type="checkbox" checked={form.routeEnabled} onChange={(event) => updateField("routeEnabled", event.target.checked)} />
-                <span>Acesso ao modulo Roteirizacao</span>
-              </label>
-              {form.routeEnabled ? (
-                <label>
-                  Codigos de supervisor
-                  <textarea
-                    value={form.routeCodes}
-                    onChange={(event) => updateField("routeCodes", event.target.value)}
-                    rows={3}
-                    placeholder="Ex.: 29, 33"
-                    required
-                  />
-                  <span className="muted small">Codigos reconhecidos: {parsedCodes.length ? parsedCodes.join(", ") : "nenhum"}</span>
-                </label>
-              ) : null}
               <label className="inline-check">
                 <input
                   type="checkbox"
@@ -225,7 +190,6 @@ export default function AdminUsersPage() {
                   <th>Nome</th>
                   <th>Login</th>
                   <th>Perfil</th>
-                  <th>Roteirizacao</th>
                   <th>Promotores</th>
                   <th>Status</th>
                   <th>Acoes</th>
@@ -237,7 +201,6 @@ export default function AdminUsersPage() {
                     <td>{user.displayName}</td>
                     <td>{user.username}</td>
                     <td>{roleLabel(user.role)}</td>
-                    <td>{user.role === "ADMIN" || user.role === "ANALYST" ? "Todos" : user.routeSupervisorCodes?.join(", ") || "-"}</td>
                     <td>{user.role === "ADMIN" || user.role === "ANALYST" || user.promoterRouteEnabled ? "Sim" : "-"}</td>
                     <td>{user.active ? "Ativo" : "Inativo"}</td>
                     <td>
