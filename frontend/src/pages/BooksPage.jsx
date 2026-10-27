@@ -1,9 +1,25 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { apiFormData, apiJson } from "../services/api";
+import bookBackground117 from "../assets/book-backgrounds/117.png";
+import bookBackground1968 from "../assets/book-backgrounds/1968.png";
+import bookBackground3609 from "../assets/book-backgrounds/3609.png";
+import bookBackground4698 from "../assets/book-backgrounds/4698.png";
+import bookBackground4701 from "../assets/book-backgrounds/4701.png";
+import bookBackground4750 from "../assets/book-backgrounds/4750.png";
+import bookBackground5569 from "../assets/book-backgrounds/5569.png";
 
 const MANAGER_ROLES = new Set(["ADMIN", "ANALYST", "MERCH_COORDINATOR"]);
 const REVIEWER_ROLES = new Set(["ADMIN", "SUPERVISOR"]);
+const BOOK_PAGE_BACKGROUNDS = {
+  117: bookBackground117,
+  1968: bookBackground1968,
+  3609: bookBackground3609,
+  4698: bookBackground4698,
+  4701: bookBackground4701,
+  4750: bookBackground4750,
+  5569: bookBackground5569
+};
 
 function photoTypeLabel(value) {
   return value === "FRENTE_LOJA" ? "Frente de Loja" : value === "ACAO" ? "Ação" : "Capa";
@@ -32,23 +48,41 @@ function escapeHtml(value) {
 }
 
 function exportBookPdf(book) {
+  const pageBackground = BOOK_PAGE_BACKGROUNDS[String(book.codigoFornecedor)];
+  if (!pageBackground) {
+    throw new Error(`Não existe um padrão de página cadastrado para o fornecedor ${book.codigoFornecedor}.`);
+  }
   const popup = window.open("", "_blank");
   if (!popup) throw new Error("O navegador bloqueou a janela de exportação. Libere pop-ups e tente novamente.");
   popup.opener = null;
   const cover = book.anexos?.find((item) => item.tipo === "CAPA");
-  const records = (book.registros || []).map((record, index) => `
-    <section class="record">
-      <header><span>REGISTRO ${String(index + 1).padStart(2, "0")}</span><h2>${escapeHtml(record.codigoCliente)} · ${escapeHtml(record.promotor)}</h2></header>
-      <div class="photos">${(record.anexos || []).map((photo) => `<figure><img src="${escapeHtml(photo.url)}" alt=""><figcaption>${escapeHtml(photoTypeLabel(photo.tipo))}</figcaption></figure>`).join("")}</div>
-    </section>`).join("");
+  const records = (book.registros || []).map((record, index) => {
+    const photos = record.anexos || [];
+    const columns = photos.length <= 1 ? 1 : photos.length <= 4 ? 2 : photos.length <= 9 ? 3 : 4;
+    const rows = Math.max(1, Math.ceil(photos.length / columns));
+    return `
+      <section class="record">
+        <img class="record-background" src="${escapeHtml(pageBackground)}" alt="">
+        <div class="record-content">
+          <header>
+            <span>REGISTRO ${String(index + 1).padStart(2, "0")}</span>
+            <div class="record-identification">
+              <div><small>CÓDIGO DA LOJA</small><h2>${escapeHtml(record.codigoCliente)}</h2></div>
+              <div><small>PROMOTOR</small><strong>${escapeHtml(record.promotor)}</strong></div>
+            </div>
+          </header>
+          <div class="photos" style="--photo-columns:${columns};--photo-rows:${rows}">${photos.map((photo) => `<figure><img src="${escapeHtml(photo.url)}" alt=""><figcaption>${escapeHtml(photoTypeLabel(photo.tipo))}</figcaption></figure>`).join("")}</div>
+        </div>
+      </section>`;
+  }).join("");
   popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(book.nome)}</title><style>
-    @page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;color:#091d45;font-family:Arial,sans-serif}.cover,.record{min-height:270mm;page-break-after:always;display:flex;flex-direction:column}.cover{justify-content:center;text-align:center}.cover img{width:100%;max-height:210mm;object-fit:contain}.cover h1{font-size:30px;margin:18px 0 6px}.cover p{font-size:15px;color:#5f6b82}.record header{border-left:7px solid #f45b16;padding:4px 0 4px 16px;margin-bottom:18px}.record header span{font-size:10px;letter-spacing:2px;color:#c83e08}.record h2{font-size:22px;margin:5px 0}.photos{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.photos figure{margin:0;border:1px solid #d9dce4;padding:7px;break-inside:avoid}.photos img{width:100%;height:108mm;object-fit:contain;background:#f3efe3}.photos figcaption{text-align:center;font-weight:bold;padding-top:6px;font-size:12px}.record:last-child{page-break-after:auto}
+    @page{size:A4 landscape;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;color:#091d45;font-family:"Trebuchet MS",Arial,sans-serif;background:#fff}.page,.cover,.record{width:297mm;height:210mm;overflow:hidden;break-after:page;page-break-after:always}.cover{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10mm 14mm;text-align:center}.cover img{display:block;max-width:100%;max-height:164mm;object-fit:contain}.cover h1{font-size:28px;line-height:1.1;margin:7mm 0 2mm}.cover p{font-size:14px;color:#5f6b82;margin:0}.record{position:relative}.record-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:fill}.record-content{position:relative;z-index:1;height:100%;padding:56mm 15mm 22mm 20mm;display:flex;flex-direction:column;gap:4mm}.record header{flex:0 0 auto;background:rgba(255,255,255,.94);border-left:2.5mm solid #f45b16;border-radius:0 3mm 3mm 0;padding:2.4mm 4mm;box-shadow:0 1.5mm 5mm rgba(9,29,69,.12)}.record header>span{display:block;font-size:8px;font-weight:800;letter-spacing:1.8px;color:#c83e08;margin-bottom:1.5mm}.record-identification{display:flex;align-items:end;gap:12mm}.record-identification>div:first-child{min-width:35mm}.record-identification small{display:block;font-size:8px;letter-spacing:1.1px;color:#63708a;margin-bottom:.8mm}.record-identification h2,.record-identification strong{display:block;margin:0;color:#091d45}.record-identification h2{font-size:21px;line-height:1}.record-identification strong{font-size:16px;line-height:1.1}.photos{min-height:0;flex:1;display:grid;grid-template-columns:repeat(var(--photo-columns),minmax(0,1fr));grid-template-rows:repeat(var(--photo-rows),minmax(0,1fr));gap:3mm}.photos figure{min-width:0;min-height:0;margin:0;padding:2mm;background:rgba(255,255,255,.95);border:1px solid rgba(9,29,69,.18);border-radius:2.5mm;display:flex;flex-direction:column;break-inside:avoid;box-shadow:0 1.5mm 5mm rgba(9,29,69,.1)}.photos img{display:block;width:100%;min-height:0;flex:1;object-fit:contain;background:#f4f1e9;border-radius:1.5mm}.photos figcaption{flex:0 0 auto;text-align:center;font-weight:700;padding-top:1.4mm;font-size:9px}.record:last-of-type{break-after:auto;page-break-after:auto}
   </style></head><body><section class="cover">${cover ? `<img src="${escapeHtml(cover.url)}" alt="">` : ""}<h1>${escapeHtml(book.nome)}</h1><p>Fornecedor ${escapeHtml(book.codigoFornecedor)} · ${escapeHtml(book.periodo)}</p></section>${records}</body></html>`);
   popup.document.close();
   const printWhenReady = () => {
     const images = [...popup.document.images];
     Promise.all(images.map((image) => image.complete ? Promise.resolve() : new Promise((resolve) => { image.onload = resolve; image.onerror = resolve; })))
-      .then(() => { popup.focus(); popup.print(); });
+      .then(() => { window.setTimeout(() => { popup.focus(); popup.print(); }, 150); });
   };
   if (popup.document.readyState === "complete") printWhenReady();
   else popup.addEventListener("load", printWhenReady, { once: true });
