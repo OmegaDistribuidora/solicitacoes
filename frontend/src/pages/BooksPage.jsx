@@ -38,54 +38,145 @@ function submissionStatusLabel(value) {
   return "Aguardando análise";
 }
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function roundedRect(context, x, y, width, height, radius) {
+  context.beginPath();
+  context.roundRect(x, y, width, height, radius);
 }
 
-function exportBookPdf(book) {
+async function loadPdfImage(url) {
+  const response = await fetch(url, { credentials: "same-origin" });
+  if (!response.ok) throw new Error(`Não foi possível carregar uma imagem do book (${response.status}).`);
+  const objectUrl = URL.createObjectURL(await response.blob());
+  try {
+    const image = new Image();
+    image.decoding = "async";
+    image.src = objectUrl;
+    await image.decode();
+    return image;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function drawContainedImage(context, image, x, y, width, height) {
+  const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+  const renderedWidth = image.naturalWidth * scale;
+  const renderedHeight = image.naturalHeight * scale;
+  context.drawImage(image, x + (width - renderedWidth) / 2, y + (height - renderedHeight) / 2, renderedWidth, renderedHeight);
+}
+
+function fitText(context, text, maxWidth, initialSize, weight = 700) {
+  let size = initialSize;
+  do {
+    context.font = `${weight} ${size}px "Trebuchet MS", Arial, sans-serif`;
+    if (context.measureText(text).width <= maxWidth) return;
+    size -= 2;
+  } while (size > 18);
+}
+
+function safePdfFilename(value) {
+  const cleanName = String(value || "book")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `${cleanName || "book"}.pdf`;
+}
+
+async function exportBookPdf(book) {
   const pageBackground = BOOK_PAGE_BACKGROUNDS[String(book.codigoFornecedor)];
   if (!pageBackground) {
     throw new Error(`Não existe um padrão de página cadastrado para o fornecedor ${book.codigoFornecedor}.`);
   }
-  const popup = window.open("", "_blank");
-  if (!popup) throw new Error("O navegador bloqueou a janela de exportação. Libere pop-ups e tente novamente.");
-  popup.opener = null;
   const cover = book.anexos?.find((item) => item.tipo === "CAPA");
-  const records = (book.registros || []).map((record, index) => {
+  if (!cover?.url) throw new Error("Este book não possui uma imagem de capa.");
+
+  const [{ jsPDF }, coverImage, backgroundImage] = await Promise.all([
+    import("jspdf"),
+    loadPdfImage(cover.url),
+    loadPdfImage(pageBackground)
+  ]);
+  const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
+  const canvas = document.createElement("canvas");
+  canvas.width = 1684;
+  canvas.height = 1191;
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) throw new Error("O navegador não conseguiu preparar a exportação do PDF.");
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  drawContainedImage(context, coverImage, 0, 0, canvas.width, canvas.height);
+  pdf.addImage(canvas.toDataURL("image/jpeg", 0.94), "JPEG", 0, 0, 297, 210, undefined, "FAST");
+
+  for (const [index, record] of (book.registros || []).entries()) {
     const photos = record.anexos || [];
     const columns = photos.length <= 1 ? 1 : photos.length <= 4 ? 2 : photos.length <= 9 ? 3 : 4;
     const rows = Math.max(1, Math.ceil(photos.length / columns));
-    return `
-      <section class="record">
-        <img class="record-background" src="${escapeHtml(pageBackground)}" alt="">
-        <div class="record-content">
-          <header>
-            <span>REGISTRO ${String(index + 1).padStart(2, "0")}</span>
-            <div class="record-identification">
-              <div><small>CÓDIGO DA LOJA</small><h2>${escapeHtml(record.codigoCliente)}</h2></div>
-              <div><small>PROMOTOR</small><strong>${escapeHtml(record.promotor)}</strong></div>
-            </div>
-          </header>
-          <div class="photos" style="--photo-columns:${columns};--photo-rows:${rows}">${photos.map((photo) => `<figure><img src="${escapeHtml(photo.url)}" alt=""><figcaption>${escapeHtml(photoTypeLabel(photo.tipo))}</figcaption></figure>`).join("")}</div>
-        </div>
-      </section>`;
-  }).join("");
-  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(book.nome)}</title><style>
-    @page{size:A4 landscape;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;color:#091d45;font-family:"Trebuchet MS",Arial,sans-serif;background:#fff}.page,.cover,.record{width:297mm;height:210mm;overflow:hidden;break-after:page;page-break-after:always}.cover{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10mm 14mm;text-align:center}.cover img{display:block;max-width:100%;max-height:164mm;object-fit:contain}.cover h1{font-size:28px;line-height:1.1;margin:7mm 0 2mm}.cover p{font-size:14px;color:#5f6b82;margin:0}.record{position:relative}.record-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:fill}.record-content{position:relative;z-index:1;height:100%;padding:56mm 15mm 22mm 20mm;display:flex;flex-direction:column;gap:4mm}.record header{flex:0 0 auto;background:rgba(255,255,255,.94);border-left:2.5mm solid #f45b16;border-radius:0 3mm 3mm 0;padding:2.4mm 4mm;box-shadow:0 1.5mm 5mm rgba(9,29,69,.12)}.record header>span{display:block;font-size:8px;font-weight:800;letter-spacing:1.8px;color:#c83e08;margin-bottom:1.5mm}.record-identification{display:flex;align-items:end;gap:12mm}.record-identification>div:first-child{min-width:35mm}.record-identification small{display:block;font-size:8px;letter-spacing:1.1px;color:#63708a;margin-bottom:.8mm}.record-identification h2,.record-identification strong{display:block;margin:0;color:#091d45}.record-identification h2{font-size:21px;line-height:1}.record-identification strong{font-size:16px;line-height:1.1}.photos{min-height:0;flex:1;display:grid;grid-template-columns:repeat(var(--photo-columns),minmax(0,1fr));grid-template-rows:repeat(var(--photo-rows),minmax(0,1fr));gap:3mm}.photos figure{min-width:0;min-height:0;margin:0;padding:2mm;background:rgba(255,255,255,.95);border:1px solid rgba(9,29,69,.18);border-radius:2.5mm;display:flex;flex-direction:column;break-inside:avoid;box-shadow:0 1.5mm 5mm rgba(9,29,69,.1)}.photos img{display:block;width:100%;min-height:0;flex:1;object-fit:contain;background:#f4f1e9;border-radius:1.5mm}.photos figcaption{flex:0 0 auto;text-align:center;font-weight:700;padding-top:1.4mm;font-size:9px}.record:last-of-type{break-after:auto;page-break-after:auto}
-  </style></head><body><section class="cover">${cover ? `<img src="${escapeHtml(cover.url)}" alt="">` : ""}<h1>${escapeHtml(book.nome)}</h1><p>Fornecedor ${escapeHtml(book.codigoFornecedor)} · ${escapeHtml(book.periodo)}</p></section>${records}</body></html>`);
-  popup.document.close();
-  const printWhenReady = () => {
-    const images = [...popup.document.images];
-    Promise.all(images.map((image) => image.complete ? Promise.resolve() : new Promise((resolve) => { image.onload = resolve; image.onerror = resolve; })))
-      .then(() => { window.setTimeout(() => { popup.focus(); popup.print(); }, 150); });
-  };
-  if (popup.document.readyState === "complete") printWhenReady();
-  else popup.addEventListener("load", printWhenReady, { once: true });
+    const photoImages = await Promise.all(photos.map((photo) => loadPdfImage(photo.url)));
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+
+    const left = 113;
+    const right = 85;
+    const top = 318;
+    const bottom = 125;
+    const headerHeight = 112;
+    const gap = 23;
+    const contentWidth = canvas.width - left - right;
+
+    context.fillStyle = "rgba(255,255,255,0.95)";
+    roundedRect(context, left, top, contentWidth, headerHeight, 15);
+    context.fill();
+    context.fillStyle = "#f45b16";
+    context.fillRect(left, top, 14, headerHeight);
+    context.fillStyle = "#c83e08";
+    context.font = '800 17px "Trebuchet MS", Arial, sans-serif';
+    context.fillText(`REGISTRO ${String(index + 1).padStart(2, "0")}`, left + 38, top + 29);
+    context.fillStyle = "#63708a";
+    context.font = '700 15px "Trebuchet MS", Arial, sans-serif';
+    context.fillText("CÓDIGO DA LOJA", left + 38, top + 56);
+    context.fillText("PROMOTOR", left + 330, top + 56);
+    context.fillStyle = "#091d45";
+    fitText(context, String(record.codigoCliente ?? ""), 250, 35, 800);
+    context.fillText(String(record.codigoCliente ?? ""), left + 38, top + 92);
+    const promoter = String(record.promotor || "");
+    fitText(context, promoter, contentWidth - 370, 29, 700);
+    context.fillText(promoter, left + 330, top + 91);
+
+    const gridTop = top + headerHeight + gap;
+    const gridHeight = canvas.height - gridTop - bottom;
+    const cardGap = 17;
+    const cardWidth = (contentWidth - cardGap * (columns - 1)) / columns;
+    const cardHeight = (gridHeight - cardGap * (rows - 1)) / rows;
+    photoImages.forEach((image, photoIndex) => {
+      const column = photoIndex % columns;
+      const row = Math.floor(photoIndex / columns);
+      const x = left + column * (cardWidth + cardGap);
+      const y = gridTop + row * (cardHeight + cardGap);
+      context.fillStyle = "rgba(255,255,255,0.96)";
+      roundedRect(context, x, y, cardWidth, cardHeight, 14);
+      context.fill();
+      context.strokeStyle = "rgba(9,29,69,0.18)";
+      context.lineWidth = 2;
+      context.stroke();
+      const captionHeight = 35;
+      context.fillStyle = "#f4f1e9";
+      roundedRect(context, x + 11, y + 11, cardWidth - 22, cardHeight - captionHeight - 16, 8);
+      context.fill();
+      drawContainedImage(context, image, x + 11, y + 11, cardWidth - 22, cardHeight - captionHeight - 16);
+      context.fillStyle = "#091d45";
+      context.font = '700 17px "Trebuchet MS", Arial, sans-serif';
+      context.textAlign = "center";
+      context.fillText(photoTypeLabel(photos[photoIndex].tipo), x + cardWidth / 2, y + cardHeight - 13);
+      context.textAlign = "left";
+    });
+
+    pdf.addPage("a4", "landscape");
+    pdf.addImage(canvas.toDataURL("image/jpeg", 0.9), "JPEG", 0, 0, 297, 210, undefined, "FAST");
+  }
+
+  pdf.save(safePdfFilename(book.nome));
 }
 
 function BookForm({ book, token, onClose, onSaved }) {
@@ -219,7 +310,7 @@ function BookDetails({ book, role, busy, error, onClose, onEdit, onDelete, onSub
           {canManage && book.status === "ACTIVE" ? <><button type="button" className="primary-btn" onClick={onEdit}>Editar dados</button><button type="button" className="secondary-btn" disabled={busy} onClick={() => onChangeStatus("CLOSED")}>Encerrar book</button><button type="button" className="danger-btn" disabled={busy} onClick={onDelete}>Excluir book</button></> : null}
           {canManage && ["CLOSED", "REJECTED"].includes(book.status) ? <button type="button" className="secondary-btn" disabled={busy} onClick={() => onChangeStatus("ACTIVE")}>Reabrir book</button> : null}
           {canReviewBook && book.status === "CLOSED" ? <><button type="button" className="primary-btn" disabled={busy} onClick={() => onChangeStatus("APPROVED")}>Aprovar book</button><button type="button" className="danger-btn" disabled={busy} onClick={() => onChangeStatus("REJECTED")}>Recusar book</button></> : null}
-          {book.status !== "ACTIVE" && (canManage || canReviewBook) ? <button type="button" className="secondary-btn" onClick={onExport}>Exportar PDF</button> : null}
+          {book.status !== "ACTIVE" && (canManage || canReviewBook) ? <button type="button" className="secondary-btn" disabled={busy} onClick={onExport}>{busy ? "Gerando PDF..." : "Exportar PDF"}</button> : null}
           <button type="button" className="secondary-btn" onClick={onClose}>Fechar</button>
         </div>
       </section>
@@ -297,8 +388,10 @@ const BooksPage = forwardRef(function BooksPage(_, ref) {
     try { await apiJson(`/modules/promotores/books/${selected.id}/registros/ordem`, { method: "PATCH", token, data: { registroIds: reordered.map((item) => item.id) } }); setSelected((current) => ({ ...current, registros: reordered })); await load(); } catch (requestError) { setDetailError(requestError.message); } finally { setBusy(false); }
   }
 
-  function handleExport() {
-    try { exportBookPdf(selected); } catch (exportError) { setDetailError(exportError.message); }
+  async function handleExport() {
+    setBusy(true);
+    setDetailError("");
+    try { await exportBookPdf(selected); } catch (exportError) { setDetailError(exportError.message); } finally { setBusy(false); }
   }
 
   return (
