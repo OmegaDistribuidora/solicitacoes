@@ -71,17 +71,16 @@ export type OmegaCustomer = {
 };
 
 type CustomerCacheEntry = {
-  value: OmegaCustomer | null;
+  value: OmegaCustomer;
   expiresAt: number;
 };
 
 const CUSTOMER_CACHE_MAX_ENTRIES = 10000;
-const CUSTOMER_NOT_FOUND_TTL_MS = 5 * 60 * 1000;
 const customerCache = new Map<number, CustomerCacheEntry>();
 
 function customerCacheTtlMs(): number {
   const configured = env.omegaApi.customerCacheTtlMs;
-  return Number.isFinite(configured) && configured > 0 ? configured : 24 * 60 * 60 * 1000;
+  return Number.isFinite(configured) && configured > 0 ? configured : 60 * 24 * 60 * 60 * 1000;
 }
 
 function pruneCustomerCache(now: number): void {
@@ -266,11 +265,11 @@ export async function getOmegaCustomers(customerCodes: number[]): Promise<OmegaC
       }
       const fetchedByCode = new Map(fetchedCustomers.map((customer) => [customer.codigo, customer]));
       const positiveExpiration = Date.now() + customerCacheTtlMs();
-      const negativeExpiration = Date.now() + Math.min(customerCacheTtlMs(), CUSTOMER_NOT_FOUND_TTL_MS);
       for (const code of chunk) {
-        const customer = fetchedByCode.get(code) || null;
+        const customer = fetchedByCode.get(code);
+        if (!customer) continue;
         customerCache.delete(code);
-        customerCache.set(code, { value: customer, expiresAt: customer ? positiveExpiration : negativeExpiration });
+        customerCache.set(code, { value: customer, expiresAt: positiveExpiration });
       }
     } catch (error) {
       if (error instanceof OmegaApiError) throw error;
@@ -284,6 +283,6 @@ export async function getOmegaCustomers(customerCodes: number[]): Promise<OmegaC
   }
   return codes.flatMap((code) => {
     const entry = customerCache.get(code);
-    return entry?.value ? [entry.value] : [];
+    return entry ? [entry.value] : [];
   });
 }
