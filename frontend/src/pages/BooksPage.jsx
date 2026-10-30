@@ -84,6 +84,16 @@ function safePdfFilename(value) {
   return `${cleanName || "book"}.pdf`;
 }
 
+function formatBookPeriod(book) {
+  const fullMonthNames = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+  const isoMatch = /^(\d{4})-(\d{2})/.exec(String(book.dataPeriodo || ""));
+  if (isoMatch) return `${fullMonthNames[Number(isoMatch[2]) - 1]} de ${isoMatch[1]}`;
+  const shortMonthNames = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  const periodMatch = /^([a-zç]{3})\/(\d{4})$/i.exec(String(book.periodo || ""));
+  const monthIndex = periodMatch ? shortMonthNames.indexOf(periodMatch[1].toLowerCase()) : -1;
+  return monthIndex >= 0 ? `${fullMonthNames[monthIndex]} de ${periodMatch[2]}` : String(book.periodo || "");
+}
+
 async function exportBookPdf(book) {
   const pageBackground = BOOK_PAGE_BACKGROUNDS[String(book.codigoFornecedor)];
   if (!pageBackground) {
@@ -107,6 +117,20 @@ async function exportBookPdf(book) {
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, canvas.width, canvas.height);
   drawContainedImage(context, coverImage, 0, 0, canvas.width, canvas.height);
+  const coverPeriod = formatBookPeriod(book);
+  if (coverPeriod) {
+    context.font = '700 34px "Trebuchet MS", Arial, sans-serif';
+    const periodWidth = Math.max(390, context.measureText(coverPeriod).width + 90);
+    const periodX = (canvas.width - periodWidth) / 2;
+    const periodY = canvas.height - 105;
+    context.fillStyle = "rgba(9,29,69,0.88)";
+    roundedRect(context, periodX, periodY, periodWidth, 66, 33);
+    context.fill();
+    context.fillStyle = "#ffffff";
+    context.textAlign = "center";
+    context.fillText(coverPeriod, canvas.width / 2, periodY + 45);
+    context.textAlign = "left";
+  }
   pdf.addImage(canvas.toDataURL("image/jpeg", 0.94), "JPEG", 0, 0, 297, 210, undefined, "FAST");
 
   for (const [index, record] of (book.registros || []).entries()) {
@@ -121,7 +145,7 @@ async function exportBookPdf(book) {
     const right = 85;
     const top = 318;
     const bottom = 125;
-    const headerHeight = 112;
+    const headerHeight = 124;
     const gap = 23;
     const contentWidth = canvas.width - left - right;
 
@@ -135,14 +159,19 @@ async function exportBookPdf(book) {
     context.fillText(`REGISTRO ${String(index + 1).padStart(2, "0")}`, left + 38, top + 29);
     context.fillStyle = "#63708a";
     context.font = '700 15px "Trebuchet MS", Arial, sans-serif';
-    context.fillText("CÓDIGO DA LOJA", left + 38, top + 56);
-    context.fillText("PROMOTOR", left + 330, top + 56);
+    context.fillText("CLIENTE", left + 38, top + 59);
+    context.fillText("CIDADE", left + 680, top + 59);
+    context.fillText("PROMOTOR", left + 1030, top + 59);
     context.fillStyle = "#091d45";
-    fitText(context, String(record.codigoCliente ?? ""), 250, 35, 800);
-    context.fillText(String(record.codigoCliente ?? ""), left + 38, top + 92);
+    const customerName = String(record.clienteNome || "Cliente não encontrado");
+    fitText(context, customerName, 590, 29, 800);
+    context.fillText(customerName, left + 38, top + 101);
+    const customerCity = String(record.clienteCidade || "Cidade não informada");
+    fitText(context, customerCity, 300, 27, 700);
+    context.fillText(customerCity, left + 680, top + 101);
     const promoter = String(record.promotor || "");
-    fitText(context, promoter, contentWidth - 370, 29, 700);
-    context.fillText(promoter, left + 330, top + 91);
+    fitText(context, promoter, contentWidth - 1065, 27, 700);
+    context.fillText(promoter, left + 1030, top + 101);
 
     const gridTop = top + headerHeight + gap;
     const gridHeight = canvas.height - gridTop - bottom;
@@ -229,11 +258,36 @@ function BookForm({ book, token, onClose, onSaved }) {
   );
 }
 
-function SubmissionForm({ book, token, onClose, onSaved }) {
+function SubmissionForm({ book, token, autoApprove, onClose, onSaved }) {
   const [codigoCliente, setCodigoCliente] = useState("");
+  const [customer, setCustomer] = useState(null);
+  const [customerLookup, setCustomerLookup] = useState({ loading: false, message: "" });
   const [photos, setPhotos] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const code = Number(codigoCliente);
+    setCustomer(null);
+    if (!Number.isInteger(code) || code <= 0) {
+      setCustomerLookup({ loading: false, message: "" });
+      return undefined;
+    }
+    let active = true;
+    setCustomerLookup({ loading: true, message: "Consultando cliente no Winthor..." });
+    const timeout = window.setTimeout(async () => {
+      try {
+        const payload = await apiJson(`/modules/promotores/books/clientes/${code}`, { token });
+        if (!active) return;
+        setCustomer(payload.cliente);
+        setCustomerLookup({ loading: false, message: "" });
+      } catch (requestError) {
+        if (!active) return;
+        setCustomerLookup({ loading: false, message: requestError.message });
+      }
+    }, 450);
+    return () => { active = false; window.clearTimeout(timeout); };
+  }, [codigoCliente, token]);
 
   function addPhotos(type, fileList) {
     const selectedFiles = Array.from(fileList || []);
@@ -250,6 +304,7 @@ function SubmissionForm({ book, token, onClose, onSaved }) {
 
   async function submit(event) {
     event.preventDefault();
+    if (!customer) { setError(customerLookup.message || "Aguarde a confirmação do cliente no Winthor."); return; }
     if (!photos.length) { setError("Adicione pelo menos uma foto."); return; }
     setSaving(true);
     setError("");
@@ -269,19 +324,38 @@ function SubmissionForm({ book, token, onClose, onSaved }) {
   return (
     <div className="modal-backdrop" role="presentation">
       <section className="modal-card modal-card-wide" role="dialog" aria-modal="true">
-        <div className="modal-header"><div><div className="eyebrow">Enviar para {book.nome}</div><h2>Novo registro</h2><p className="muted">Seu nome de exibição será usado automaticamente como promotor.</p></div><button type="button" className="icon-btn" onClick={onClose}>x</button></div>
+        <div className="modal-header"><div><div className="eyebrow">Enviar para {book.nome}</div><h2>Novo registro</h2><p className="muted">Seu nome de exibição será usado automaticamente como promotor. {autoApprove ? "O registro será aceito automaticamente." : "O registro seguirá para aprovação."}</p></div><button type="button" className="icon-btn" onClick={onClose}>x</button></div>
         <form className="form-stack" onSubmit={submit}>
-          <label>Código do cliente<input required type="number" min="1" step="1" value={codigoCliente} onChange={(event) => setCodigoCliente(event.target.value)} /></label>
+          <div className="customer-code-row"><label>Código do cliente<input required type="number" min="1" step="1" value={codigoCliente} onChange={(event) => setCodigoCliente(event.target.value)} /></label><div className={`customer-lookup ${customer ? "customer-found" : ""}`} aria-live="polite">{customer ? <><strong>{customer.nome}</strong><span>{customer.cidade || "Cidade não informada"}</span></> : <span>{customerLookup.message || "Digite o código para consultar nome e cidade."}</span>}</div></div>
           <div className="photo-upload-grid">
             <label className="file-drop"><strong>Fotos de Frente de Loja</strong><input type="file" multiple accept=".png,.jpg,.jpeg,image/png,image/jpeg" onClick={(event) => { event.currentTarget.value = ""; }} onChange={(event) => { const files = Array.from(event.currentTarget.files || []); addPhotos("FRENTE_LOJA", files); event.currentTarget.value = ""; }} /><span>Adicionar fotos</span></label>
             <label className="file-drop"><strong>Fotos de Ação</strong><input type="file" multiple accept=".png,.jpg,.jpeg,image/png,image/jpeg" onClick={(event) => { event.currentTarget.value = ""; }} onChange={(event) => { const files = Array.from(event.currentTarget.files || []); addPhotos("ACAO", files); event.currentTarget.value = ""; }} /><span>Adicionar fotos</span></label>
           </div>
           {photos.length ? <div className="new-photo-list">{photos.map((photo) => <div className="mini-row" key={photo.key}><span>{photo.file.name}</span><strong>{photoTypeLabel(photo.type)}</strong><button type="button" className="danger-btn compact-btn" onClick={() => setPhotos((current) => current.filter((item) => item.key !== photo.key))}>Remover</button></div>)}</div> : null}
           {error ? <p className="error-text">{error}</p> : null}
-          <div className="modal-actions"><button className="primary-btn" type="submit" disabled={saving}>{saving ? "Enviando..." : "Enviar para aprovação"}</button><button className="secondary-btn" type="button" onClick={onClose}>Cancelar</button></div>
+          <div className="modal-actions"><button className="primary-btn" type="submit" disabled={saving || customerLookup.loading || !customer}>{saving ? "Enviando..." : autoApprove ? "Adicionar ao book" : "Enviar para aprovação"}</button><button className="secondary-btn" type="button" onClick={onClose}>Cancelar</button></div>
         </form>
       </section>
     </div>
+  );
+}
+
+function SubmissionReviewCard({ submission, busy, onReview }) {
+  const allPhotoIds = useMemo(() => submission.anexos?.map((photo) => photo.id) || [], [submission.anexos]);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState(() => new Set(allPhotoIds));
+  function togglePhoto(photoId) {
+    setSelectedPhotoIds((current) => {
+      const next = new Set(current);
+      if (next.has(photoId)) next.delete(photoId); else next.add(photoId);
+      return next;
+    });
+  }
+  return (
+    <section className="book-record-card submission-card">
+      <div className="section-header"><div><div className="eyebrow">Envio #{submission.id}</div><h3>{submission.clienteNome} · {submission.clienteCidade}</h3><p className="muted small">Promotor: {submission.promotorNome} · Código {submission.codigoCliente}</p></div><div className="inline-actions"><button type="button" className="primary-btn compact-btn" disabled={busy || selectedPhotoIds.size === 0} onClick={() => onReview(submission, "ACCEPTED", [...selectedPhotoIds])}>Aceitar {selectedPhotoIds.size} foto(s)</button><button type="button" className="danger-btn compact-btn" disabled={busy} onClick={() => onReview(submission, "REJECTED", [])}>Recusar</button></div></div>
+      <div className="photo-selection-toolbar"><span>Selecione as fotos que entrarão no book.</span><div className="inline-actions"><button type="button" className="text-btn" onClick={() => setSelectedPhotoIds(new Set(allPhotoIds))}>Selecionar todas</button><button type="button" className="text-btn" onClick={() => setSelectedPhotoIds(new Set())}>Limpar</button></div></div>
+      <div className="book-photo-grid">{submission.anexos?.map((photo) => { const selected = selectedPhotoIds.has(photo.id); return <button type="button" className={`book-photo selectable-photo ${selected ? "selected" : ""}`} onClick={() => togglePhoto(photo.id)} key={photo.id}><span className="photo-check">{selected ? "✓" : ""}</span><img src={photo.url} alt={photo.nomeOriginal} /><figcaption>{photoTypeLabel(photo.tipo)} · {selected ? "Selecionada" : "Não selecionada"}</figcaption></button>; })}</div>
+    </section>
   );
 }
 
@@ -299,15 +373,15 @@ function BookDetails({ book, role, busy, error, onClose, onEdit, onDelete, onSub
         {book.workflow?.motivoRevisao ? <div className="callout-card"><strong>Motivo da recusa</strong><p className="muted">{book.workflow.motivoRevisao}</p></div> : null}
         {cover ? <img className="book-detail-cover" src={cover.url} alt={`Capa de ${book.nome}`} /> : null}
 
-        {canManage && pendingSubmissions.length ? <section className="workflow-section"><div className="section-header"><div><h3>Registros aguardando aprovação</h3><p className="muted small">Confira cliente, promotor e fotos antes de aceitar.</p></div><span className="status-pill status-pending">{pendingSubmissions.length} pendente(s)</span></div><div className="book-record-list">{pendingSubmissions.map((submission) => <section className="book-record-card submission-card" key={submission.id}><div className="section-header"><div><div className="eyebrow">Envio #{submission.id}</div><h3>{submission.codigoCliente} · {submission.promotorNome}</h3></div><div className="inline-actions"><button className="primary-btn compact-btn" disabled={busy} onClick={() => onReviewSubmission(submission, "ACCEPTED")}>Aceitar</button><button className="danger-btn compact-btn" disabled={busy} onClick={() => onReviewSubmission(submission, "REJECTED")}>Recusar</button></div></div><div className="book-photo-grid">{submission.anexos?.map((photo) => <a className="book-photo" href={photo.url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.url} alt={photo.nomeOriginal} /><figcaption>{photoTypeLabel(photo.tipo)}</figcaption></a>)}</div></section>)}</div></section> : null}
+        {canManage && pendingSubmissions.length ? <section className="workflow-section"><div className="section-header"><div><h3>Registros aguardando aprovação</h3><p className="muted small">Confira os dados e marque somente as fotos que entrarão no book.</p></div><span className="status-pill status-pending">{pendingSubmissions.length} pendente(s)</span></div><div className="book-record-list">{pendingSubmissions.map((submission) => <SubmissionReviewCard submission={submission} busy={busy} onReview={onReviewSubmission} key={submission.id} />)}</div></section> : null}
 
-        <section className="workflow-section"><div className="book-record-list">{book.registros?.length ? book.registros.map((record, index) => <section className="book-record-card" key={record.id}><div className="section-header"><h3>{index + 1}. {record.codigoCliente} · {record.promotor}</h3>{canManage && book.registros.length > 1 ? <div className="order-controls"><button type="button" className="secondary-btn compact-btn" disabled={busy || index === 0} onClick={() => onMoveRecord(index, -1)}>↑</button><button type="button" className="secondary-btn compact-btn" disabled={busy || index === book.registros.length - 1} onClick={() => onMoveRecord(index, 1)}>↓</button></div> : null}</div><div className="book-photo-grid">{record.anexos?.map((photo) => <a className="book-photo" href={photo.url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.url} alt={photo.nomeOriginal} /><figcaption>{photoTypeLabel(photo.tipo)}</figcaption></a>)}</div></section>) : <div className="empty-state">Nenhum registro aceito ainda.</div>}</div></section>
+        <section className="workflow-section"><div className="book-record-list">{book.registros?.length ? book.registros.map((record, index) => <section className="book-record-card" key={record.id}><div className="section-header"><div><h3>{index + 1}. {record.clienteNome} · {record.clienteCidade}</h3><p className="muted small">Promotor: {record.promotor} · Código {record.codigoCliente}</p></div>{canManage && book.registros.length > 1 ? <div className="order-controls"><button type="button" className="secondary-btn compact-btn" disabled={busy || index === 0} onClick={() => onMoveRecord(index, -1)}>↑</button><button type="button" className="secondary-btn compact-btn" disabled={busy || index === book.registros.length - 1} onClick={() => onMoveRecord(index, 1)}>↓</button></div> : null}</div><div className="book-photo-grid">{record.anexos?.map((photo) => <a className="book-photo" href={photo.url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.url} alt={photo.nomeOriginal} /><figcaption>{photoTypeLabel(photo.tipo)}</figcaption></a>)}</div></section>) : <div className="empty-state">Nenhum registro aceito ainda.</div>}</div></section>
 
         {isPromoter && book.envios?.length ? <section className="workflow-section"><h3>Meus envios</h3><div className="submission-history">{book.envios.map((submission) => <div className="mini-row" key={submission.id}><span>Cliente {submission.codigoCliente}</span><strong>{submissionStatusLabel(submission.status)}</strong>{submission.motivoRevisao ? <small>{submission.motivoRevisao}</small> : null}</div>)}</div></section> : null}
 
         <div className="modal-actions book-action-bar">
           {isPromoter && book.status === "ACTIVE" ? <button type="button" className="primary-btn" onClick={onSubmitRecord}>+ Enviar registro</button> : null}
-          {canManage && book.status === "ACTIVE" ? <><button type="button" className="primary-btn" onClick={onEdit}>Editar dados</button><button type="button" className="secondary-btn" disabled={busy} onClick={() => onChangeStatus("CLOSED")}>Encerrar book</button><button type="button" className="danger-btn" disabled={busy} onClick={onDelete}>Excluir book</button></> : null}
+          {canManage && book.status === "ACTIVE" ? <><button type="button" className="primary-btn" onClick={onSubmitRecord}>+ Adicionar registro</button><button type="button" className="secondary-btn" onClick={onEdit}>Editar dados</button><button type="button" className="secondary-btn" disabled={busy} onClick={() => onChangeStatus("CLOSED")}>Encerrar book</button><button type="button" className="danger-btn" disabled={busy} onClick={onDelete}>Excluir book</button></> : null}
           {canManage && ["CLOSED", "REJECTED"].includes(book.status) ? <button type="button" className="secondary-btn" disabled={busy} onClick={() => onChangeStatus("ACTIVE")}>Reabrir book</button> : null}
           {canReviewBook && book.status === "CLOSED" ? <><button type="button" className="primary-btn" disabled={busy} onClick={() => onChangeStatus("APPROVED")}>Aprovar book</button><button type="button" className="danger-btn" disabled={busy} onClick={() => onChangeStatus("REJECTED")}>Recusar book</button></> : null}
           {book.status !== "ACTIVE" && (canManage || canReviewBook) ? <button type="button" className="secondary-btn" disabled={busy} onClick={onExport}>{busy ? "Gerando PDF..." : "Exportar PDF"}</button> : null}
@@ -364,11 +438,11 @@ const BooksPage = forwardRef(function BooksPage(_, ref) {
     try { await apiJson(`/modules/promotores/books/${book.id}`, { method: "DELETE", token }); setSelected(null); await load(); } catch (requestError) { setDetailError(requestError.message); } finally { setBusy(false); }
   }
 
-  async function reviewSubmission(submission, decisao) {
+  async function reviewSubmission(submission, decisao, anexoIds = []) {
     const motivo = decisao === "REJECTED" ? window.prompt("Motivo da recusa (opcional):", "") : "";
     if (decisao === "REJECTED" && motivo === null) return;
     setBusy(true); setDetailError("");
-    try { await apiJson(`/modules/promotores/books/${selected.id}/envios/${submission.id}/revisao`, { method: "PATCH", token, data: { decisao, motivo } }); await refreshSelected(); } catch (requestError) { setDetailError(requestError.message); } finally { setBusy(false); }
+    try { await apiJson(`/modules/promotores/books/${selected.id}/envios/${submission.id}/revisao`, { method: "PATCH", token, data: { decisao, motivo, anexoIds } }); await refreshSelected(); } catch (requestError) { setDetailError(requestError.message); } finally { setBusy(false); }
   }
 
   async function changeStatus(status) {
@@ -403,7 +477,7 @@ const BooksPage = forwardRef(function BooksPage(_, ref) {
       </section>
       {selected ? <BookDetails book={selected} role={user?.role} busy={busy} error={detailError} onClose={() => { setSelected(null); setDetailError(""); }} onEdit={() => { setEditing(selected); setSelected(null); }} onDelete={() => removeBook(selected)} onSubmitRecord={() => setSubmittingRecord(true)} onReviewSubmission={reviewSubmission} onChangeStatus={changeStatus} onMoveRecord={moveRecord} onExport={handleExport} /> : null}
       {editing !== undefined ? <BookForm book={editing} token={token} onClose={() => setEditing(undefined)} onSaved={async (book) => { setEditing(undefined); await load(); await openBook(book.id); }} /> : null}
-      {submittingRecord && selected ? <SubmissionForm book={selected} token={token} onClose={() => setSubmittingRecord(false)} onSaved={async () => { setSubmittingRecord(false); await refreshSelected(); }} /> : null}
+      {submittingRecord && selected ? <SubmissionForm book={selected} token={token} autoApprove={canManage} onClose={() => setSubmittingRecord(false)} onSaved={async () => { setSubmittingRecord(false); await refreshSelected(); }} /> : null}
     </div>
   );
 });

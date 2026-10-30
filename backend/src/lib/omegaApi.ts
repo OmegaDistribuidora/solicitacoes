@@ -54,6 +54,19 @@ const promoterMutationResponseSchema = z.object({
   entry: promoterEntrySchema.nullable()
 });
 
+const queryResponseSchema = z.object({
+  columns: z.array(z.string()),
+  rows: z.array(z.array(z.unknown())),
+  row_count: z.number().int().nonnegative(),
+  truncated: z.boolean()
+});
+
+export type OmegaCustomer = {
+  codigo: number;
+  nome: string;
+  cidade: string;
+};
+
 async function omegaApiError(response: Response, fallback: string): Promise<OmegaApiError> {
   let message = fallback;
   try {
@@ -170,4 +183,74 @@ export async function applyPromoterRouteChange(input: PromoterRouteMutation) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function getOmegaCustomers(customerCodes: number[]): Promise<OmegaCustomer[]> {
+  if (!env.omegaApi.url || !env.omegaApi.key) {
+    throw new OmegaApiError("Integracao com a API Omega nao configurada.", 503);
+  }
+  const codes = [...new Set(customerCodes.filter((code) => Number.isInteger(code) && code > 0))];
+  if (!codes.length) return [];
+  const results: OmegaCustomer[] = [];
+  for (let offset = 0; offset < codes.length; offset += 150) {
+    const chunk = codes.slice(offset, offset + 150);
+    const controller = new AbortController();
+    const timeoutMs = Number.isFinite(env.omegaApi.timeoutMs) && env.omegaApi.timeoutMs > 0
+      ? env.omegaApi.timeoutMs
+      : 10000;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(`${env.omegaApi.url}/v1/query`, {
+        method: "POST",
+        headers: {
+          "X-API-Key": env.omegaApi.key,
+          "X-Client-Name": "solicitacoes-trade-books",
+          "Content-Type": "application/json",
+          Accept: "application/json"
+        },
+        body: JSON.stringify({
+          sql: `
+            SELECT DISTINCT ON (codcli)
+              codcli, cliente, cidade
+            FROM filial.dcliente
+            WHERE codcli = ANY(%s::int[])
+            ORDER BY codcli, data_insercao DESC NULLS LAST
+          `,
+          params: [chunk],
+          max_rows: chunk.length
+        }),
+        signal: controller.signal,
+        cache: "no-store"
+      });
+      if (!response.ok) throw await omegaApiError(response, "API Omega recusou a consulta de clientes.");
+      const parsed = queryResponseSchema.safeParse(await response.json());
+      if (!parsed.success || parsed.data.truncated) {
+        throw new OmegaApiError("API Omega retornou dados de clientes invalidos.", 502);
+      }
+      const codeIndex = parsed.data.columns.indexOf("codcli");
+      const nameIndex = parsed.data.columns.indexOf("cliente");
+      const cityIndex = parsed.data.columns.indexOf("cidade");
+      if (codeIndex < 0 || nameIndex < 0 || cityIndex < 0) {
+        throw new OmegaApiError("API Omega nao retornou as colunas esperadas de clientes.", 502);
+      }
+      for (const row of parsed.data.rows) {
+        const codigo = Number(row[codeIndex]);
+        if (!Number.isInteger(codigo) || codigo <= 0) continue;
+        results.push({
+          codigo,
+          nome: String(row[nameIndex] ?? "").trim(),
+          cidade: String(row[cityIndex] ?? "").trim()
+        });
+      }
+    } catch (error) {
+      if (error instanceof OmegaApiError) throw error;
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new OmegaApiError("API Omega excedeu o tempo limite da consulta de clientes.", 504);
+      }
+      throw new OmegaApiError("API Omega indisponivel para consultar clientes.", 503);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  return results;
 }

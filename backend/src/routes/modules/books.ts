@@ -8,6 +8,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { env } from "../../config";
 import { recordAudit } from "../../lib/audit";
+import { getOmegaCustomers, OmegaApiError } from "../../lib/omegaApi";
 import prisma from "../../lib/prisma";
 import { requireAuth, requireModuleAccess } from "../../lib/security";
 import type { AppUserRole } from "../../types";
@@ -203,6 +204,19 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
     return { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)), books: books.map((book) => ({ ...book, status: effectiveStatus(book.workflow) })) };
   });
 
+  app.get("/api/modules/promotores/books/clientes/:codigo", async (request, reply) => {
+    const codigo = Number((request.params as { codigo: string }).codigo);
+    if (!Number.isInteger(codigo) || codigo <= 0) return reply.code(400).send({ message: "Informe um codigo de cliente valido." });
+    try {
+      const [cliente] = await getOmegaCustomers([codigo]);
+      if (!cliente) return reply.code(404).send({ message: "Cliente nao encontrado no Winthor." });
+      return { cliente };
+    } catch (error) {
+      if (error instanceof OmegaApiError) return reply.code(error.statusCode).send({ message: error.message });
+      throw error;
+    }
+  });
+
   app.get("/api/modules/promotores/books/:id", async (request, reply) => {
     const authUser = request.authUser!;
     const id = Number((request.params as { id: string }).id);
@@ -237,7 +251,30 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
     if (!book) return reply.code(404).send({ message: "Book nao encontrado." });
     const status = effectiveStatus(book.workflow);
     if (authUser.role === "PROMOTER" && status !== "ACTIVE") return reply.code(403).send({ message: "Este book nao esta mais ativo." });
-    return { book: { ...book, status } };
+    const customerCodes = [...book.registros.map((record) => record.codigoCliente), ...book.envios.map((submission) => submission.codigoCliente)];
+    try {
+      const customers = await getOmegaCustomers(customerCodes);
+      const customersByCode = new Map(customers.map((customer) => [customer.codigo, customer]));
+      return {
+        book: {
+          ...book,
+          status,
+          registros: book.registros.map((record) => ({
+            ...record,
+            clienteNome: customersByCode.get(record.codigoCliente)?.nome || "Cliente nao encontrado",
+            clienteCidade: customersByCode.get(record.codigoCliente)?.cidade || "Cidade nao informada"
+          })),
+          envios: book.envios.map((submission) => ({
+            ...submission,
+            clienteNome: customersByCode.get(submission.codigoCliente)?.nome || "Cliente nao encontrado",
+            clienteCidade: customersByCode.get(submission.codigoCliente)?.cidade || "Cidade nao informada"
+          }))
+        }
+      };
+    } catch (error) {
+      if (error instanceof OmegaApiError) return reply.code(error.statusCode).send({ message: error.message });
+      throw error;
+    }
   });
 
   app.post("/api/modules/promotores/books", async (request, reply) => {
@@ -304,7 +341,8 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/api/modules/promotores/books/:id/envios", async (request, reply) => {
     const authUser = request.authUser!;
-    if (authUser.role !== "PROMOTER") return reply.code(403).send({ message: "Apenas promotores podem enviar registros." });
+    const managerSubmission = isManager(authUser.role);
+    if (authUser.role !== "PROMOTER" && !managerSubmission) return reply.code(403).send({ message: "Este perfil nao pode adicionar registros." });
     const bookId = Number((request.params as { id: string }).id);
     const book = await prisma.book.findUnique({ where: { id: bookId }, include: { workflow: true } });
     if (!book) return reply.code(404).send({ message: "Book nao encontrado." });
@@ -320,16 +358,44 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
       if (upload) await fs.rm(upload.targetDir, { recursive: true, force: true }).catch(() => undefined);
       return reply.code(400).send({ message: error instanceof Error ? error.message : "Nao foi possivel ler o registro." });
     }
+    try {
+      const [customer] = await getOmegaCustomers([upload.data.codigoCliente]);
+      if (!customer) {
+        await fs.rm(upload.targetDir, { recursive: true, force: true }).catch(() => undefined);
+        return reply.code(400).send({ message: "Cliente nao encontrado no Winthor." });
+      }
+    } catch (error) {
+      await fs.rm(upload.targetDir, { recursive: true, force: true }).catch(() => undefined);
+      if (error instanceof OmegaApiError) return reply.code(error.statusCode).send({ message: error.message });
+      throw error;
+    }
     const user = await prisma.user.findUniqueOrThrow({ where: { id: authUser.userId } });
     let submission;
     try {
       submission = await prisma.$transaction(async (tx) => {
-      const workflow = await tx.bookWorkflow.findUnique({ where: { bookId } });
-      if (effectiveStatus(workflow) !== "ACTIVE") throw new Error("Este book foi encerrado e nao recebe novos registros.");
-      const created = await tx.bookSubmission.create({ data: { bookId, promotorUserId: user.id, promotorNome: user.displayName, codigoCliente: upload!.data.codigoCliente } });
-      await tx.bookSubmissionAttachment.createMany({ data: upload!.images.map((image) => ({ envioId: created.id, tipo: image.type, nomeOriginal: image.originalName, nomeArquivo: image.fileName, mimeType: image.mimeType, tamanhoBytes: image.size, caminho: image.relativePath, url: image.url })) });
-      await recordAudit({ actor: authUser, action: "SUBMIT_BOOK_RECORD", entityType: "BOOK_SUBMISSION", entityId: created.id, summary: `${user.displayName} enviou um registro para o book ${bookId}.`, after: { bookId, codigoCliente: created.codigoCliente, fotos: upload!.images.length } }, tx);
-      return tx.bookSubmission.findUniqueOrThrow({ where: { id: created.id }, include: { anexos: true } });
+        const workflow = await tx.bookWorkflow.findUnique({ where: { bookId } });
+        if (effectiveStatus(workflow) !== "ACTIVE") throw new Error("Este book foi encerrado e nao recebe novos registros.");
+        let recordId: number | null = null;
+        if (managerSubmission) {
+          const maximum = await tx.registroBook.aggregate({ where: { bookId }, _max: { ordem: true } });
+          const record = await tx.registroBook.create({ data: { bookId, promotor: user.displayName, codigoCliente: upload!.data.codigoCliente, ordem: (maximum._max.ordem ?? -1) + 1 } });
+          recordId = record.id;
+        }
+        const created = await tx.bookSubmission.create({
+          data: {
+            bookId,
+            promotorUserId: user.id,
+            promotorNome: user.displayName,
+            codigoCliente: upload!.data.codigoCliente,
+            ...(managerSubmission ? { status: "ACCEPTED", revisorUserId: user.id, revisadoEm: new Date(), registroBookId: recordId } : {})
+          }
+        });
+        await tx.bookSubmissionAttachment.createMany({ data: upload!.images.map((image) => ({ envioId: created.id, tipo: image.type, nomeOriginal: image.originalName, nomeArquivo: image.fileName, mimeType: image.mimeType, tamanhoBytes: image.size, caminho: image.relativePath, url: image.url })) });
+        if (recordId) {
+          await tx.anexoBook.createMany({ data: upload!.images.map((image) => ({ bookId, registroId: recordId, tipo: image.type, nomeOriginal: image.originalName, nomeArquivo: image.fileName, mimeType: image.mimeType, tamanhoBytes: image.size, caminho: image.relativePath, url: image.url })) });
+        }
+        await recordAudit({ actor: authUser, action: managerSubmission ? "AUTO_ACCEPT_BOOK_RECORD" : "SUBMIT_BOOK_RECORD", entityType: "BOOK_SUBMISSION", entityId: created.id, summary: `${user.displayName} adicionou um registro ao book ${bookId}${managerSubmission ? " com aceite automatico" : ""}.`, after: { bookId, codigoCliente: created.codigoCliente, fotos: upload!.images.length, status: managerSubmission ? "ACCEPTED" : "PENDING", registroBookId: recordId } }, tx);
+        return tx.bookSubmission.findUniqueOrThrow({ where: { id: created.id }, include: { anexos: true } });
       });
     } catch (error) {
       await fs.rm(upload.targetDir, { recursive: true, force: true }).catch(() => undefined);
@@ -344,12 +410,21 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
     const authUser = request.authUser;
     const bookId = Number((request.params as { bookId: string }).bookId);
     const submissionId = Number((request.params as { submissionId: string }).submissionId);
-    const parsed = z.object({ decisao: z.enum(["ACCEPTED", "REJECTED"]), motivo: z.string().trim().max(500).optional() }).safeParse(request.body);
+    const parsed = z.object({ decisao: z.enum(["ACCEPTED", "REJECTED"]), motivo: z.string().trim().max(500).optional(), anexoIds: z.array(z.coerce.number().int().positive()).optional() }).safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ message: "Revisao invalida." });
     const submission = await prisma.bookSubmission.findUnique({ where: { id: submissionId }, include: { anexos: true, book: { include: { workflow: true } } } });
     if (!submission || submission.bookId !== bookId) return reply.code(404).send({ message: "Envio nao encontrado." });
     if (submission.status !== "PENDING") return reply.code(409).send({ message: "Este envio ja foi revisado." });
     if (effectiveStatus(submission.book.workflow) !== "ACTIVE") return reply.code(409).send({ message: "Reabra o book antes de revisar envios." });
+    const selectedAttachmentIds = parsed.data.decisao === "ACCEPTED"
+      ? [...new Set(parsed.data.anexoIds ?? submission.anexos.map((attachment) => attachment.id))]
+      : [];
+    const submissionAttachmentIds = new Set(submission.anexos.map((attachment) => attachment.id));
+    if (parsed.data.decisao === "ACCEPTED" && (!selectedAttachmentIds.length || selectedAttachmentIds.some((id) => !submissionAttachmentIds.has(id)))) {
+      return reply.code(400).send({ message: "Selecione pelo menos uma foto valida para aceitar o registro." });
+    }
+    const selectedAttachments = submission.anexos.filter((attachment) => selectedAttachmentIds.includes(attachment.id));
+    const discardedAttachments = submission.anexos.filter((attachment) => !selectedAttachmentIds.includes(attachment.id));
     let recordId: number | null = null;
     await prisma.$transaction(async (tx) => {
       const claimed = await tx.bookSubmission.updateMany({
@@ -361,14 +436,15 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
         const maximum = await tx.registroBook.aggregate({ where: { bookId }, _max: { ordem: true } });
         const record = await tx.registroBook.create({ data: { bookId, promotor: submission.promotorNome, codigoCliente: submission.codigoCliente, ordem: (maximum._max.ordem ?? -1) + 1 } });
         recordId = record.id;
-        await tx.anexoBook.createMany({ data: submission.anexos.map((image) => ({ bookId, registroId: record.id, tipo: image.tipo, nomeOriginal: image.nomeOriginal, nomeArquivo: image.nomeArquivo, mimeType: image.mimeType, tamanhoBytes: image.tamanhoBytes, caminho: image.caminho, url: image.url })) });
+        await tx.anexoBook.createMany({ data: selectedAttachments.map((image) => ({ bookId, registroId: record.id, tipo: image.tipo, nomeOriginal: image.nomeOriginal, nomeArquivo: image.nomeArquivo, mimeType: image.mimeType, tamanhoBytes: image.tamanhoBytes, caminho: image.caminho, url: image.url })) });
+        if (discardedAttachments.length) await tx.bookSubmissionAttachment.deleteMany({ where: { id: { in: discardedAttachments.map((attachment) => attachment.id) } } });
       } else {
         await tx.bookSubmissionAttachment.deleteMany({ where: { envioId: submissionId } });
       }
       if (recordId) await tx.bookSubmission.update({ where: { id: submissionId }, data: { registroBookId: recordId } });
-      await recordAudit({ actor: authUser, action: parsed.data.decisao === "ACCEPTED" ? "ACCEPT_BOOK_RECORD" : "REJECT_BOOK_RECORD", entityType: "BOOK_SUBMISSION", entityId: submissionId, summary: `Envio ${submissionId} ${parsed.data.decisao === "ACCEPTED" ? "aceito" : "recusado"} no book ${bookId}.`, after: { status: parsed.data.decisao, registroBookId: recordId, motivo: parsed.data.motivo || null } }, tx);
+      await recordAudit({ actor: authUser, action: parsed.data.decisao === "ACCEPTED" ? "ACCEPT_BOOK_RECORD" : "REJECT_BOOK_RECORD", entityType: "BOOK_SUBMISSION", entityId: submissionId, summary: `Envio ${submissionId} ${parsed.data.decisao === "ACCEPTED" ? "aceito" : "recusado"} no book ${bookId}.`, after: { status: parsed.data.decisao, registroBookId: recordId, motivo: parsed.data.motivo || null, fotosAceitas: selectedAttachments.length, fotosDescartadas: discardedAttachments.length } }, tx);
     });
-    if (parsed.data.decisao === "REJECTED") await deleteFiles(submission.anexos.map((image) => path.join(env.attachmentsDir, image.caminho)));
+    if (discardedAttachments.length) await deleteFiles(discardedAttachments.map((image) => path.join(env.attachmentsDir, image.caminho)));
     return { ok: true, registroBookId: recordId };
   });
 

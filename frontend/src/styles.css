@@ -1553,6 +1553,37 @@ body:has(.modal-backdrop) {
   gap: 12px;
 }
 
+.customer-code-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(280px, 1.3fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.customer-lookup {
+  min-height: 70px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 15px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  color: var(--muted);
+  background: #f6f8fc;
+}
+
+.customer-lookup.customer-found {
+  border-style: solid;
+  border-color: #62a982;
+  color: #164f33;
+  background: #edf8f2;
+}
+
+.customer-lookup strong {
+  color: var(--navy-900);
+}
+
 .photo-upload-grid .file-drop > strong {
   color: var(--navy-900);
   font-family: var(--display);
@@ -1613,6 +1644,62 @@ body:has(.modal-backdrop) {
   color: var(--muted);
   font-family: var(--mono);
   font-size: 0.7rem;
+}
+
+.photo-selection-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.text-btn {
+  padding: 3px 0;
+  border: 0;
+  color: var(--blue);
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.selectable-photo {
+  position: relative;
+  width: 100%;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  opacity: 0.56;
+}
+
+.selectable-photo.selected {
+  border-color: var(--blue);
+  outline: 3px solid rgba(21, 78, 203, 0.16);
+  opacity: 1;
+}
+
+.photo-check {
+  position: absolute;
+  z-index: 1;
+  top: 14px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(9, 29, 69, 0.72);
+  box-shadow: 0 2px 8px rgba(9, 29, 69, 0.28);
+  font-weight: 900;
+}
+
+.selectable-photo.selected .photo-check {
+  background: var(--blue);
 }
 
 .book-detail-cover {
@@ -1729,6 +1816,7 @@ body:has(.modal-backdrop) {
   .filters-grid,
   .route-form-grid,
   .form-two,
+  .customer-code-row,
   .photo-upload-grid {
     grid-template-columns: 1fr;
   }
