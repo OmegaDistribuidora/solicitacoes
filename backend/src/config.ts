@@ -66,6 +66,7 @@ export const env = {
     url: String(process.env.OMEGA_API_URL || "").trim().replace(/\/$/, ""),
     key: String(process.env.OMEGA_API_KEY || "").trim(),
     writeKey: String(process.env.OMEGA_API_WRITE_KEY || process.env.OMEGA_API_KEY || "").trim(),
-    timeoutMs: Number(process.env.OMEGA_API_TIMEOUT_MS || 10000)
+    timeoutMs: Number(process.env.OMEGA_API_TIMEOUT_MS || 10000),
+    customerCacheTtlMs: Number(process.env.OMEGA_CUSTOMER_CACHE_TTL_MS || 86400000)
   }
 };

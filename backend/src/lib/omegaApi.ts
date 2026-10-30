@@ -70,6 +70,31 @@ export type OmegaCustomer = {
   cidade: string;
 };
 
+type CustomerCacheEntry = {
+  value: OmegaCustomer | null;
+  expiresAt: number;
+};
+
+const CUSTOMER_CACHE_MAX_ENTRIES = 10000;
+const CUSTOMER_NOT_FOUND_TTL_MS = 5 * 60 * 1000;
+const customerCache = new Map<number, CustomerCacheEntry>();
+
+function customerCacheTtlMs(): number {
+  const configured = env.omegaApi.customerCacheTtlMs;
+  return Number.isFinite(configured) && configured > 0 ? configured : 24 * 60 * 60 * 1000;
+}
+
+function pruneCustomerCache(now: number): void {
+  for (const [code, entry] of customerCache) {
+    if (entry.expiresAt <= now) customerCache.delete(code);
+  }
+  while (customerCache.size >= CUSTOMER_CACHE_MAX_ENTRIES) {
+    const oldestCode = customerCache.keys().next().value as number | undefined;
+    if (oldestCode === undefined) break;
+    customerCache.delete(oldestCode);
+  }
+}
+
 async function omegaApiError(response: Response, fallback: string): Promise<OmegaApiError> {
   let message = fallback;
   try {
@@ -194,9 +219,14 @@ export async function getOmegaCustomers(customerCodes: number[]): Promise<OmegaC
   }
   const codes = [...new Set(customerCodes.filter((code) => Number.isInteger(code) && code > 0))];
   if (!codes.length) return [];
-  const results: OmegaCustomer[] = [];
-  for (let offset = 0; offset < codes.length; offset += 200) {
-    const chunk = codes.slice(offset, offset + 200);
+  const now = Date.now();
+  pruneCustomerCache(now);
+  const missingCodes = codes.filter((code) => {
+    const cached = customerCache.get(code);
+    return !cached || cached.expiresAt <= now;
+  });
+  for (let offset = 0; offset < missingCodes.length; offset += 200) {
+    const chunk = missingCodes.slice(offset, offset + 200);
     const controller = new AbortController();
     const timeoutMs = Number.isFinite(env.omegaApi.timeoutMs) && env.omegaApi.timeoutMs > 0
       ? env.omegaApi.timeoutMs
@@ -218,15 +248,30 @@ export async function getOmegaCustomers(customerCodes: number[]): Promise<OmegaC
         signal: controller.signal,
         cache: "no-store"
       });
-      if (!response.ok) throw await omegaApiError(response, "API Omega recusou a consulta de clientes.");
-      const payload = await response.json();
-      const parsed = singleCustomer
-        ? omegaCustomerSchema.safeParse(payload)
-        : omegaCustomersResponseSchema.safeParse(payload);
-      if (!parsed.success) {
-        throw new OmegaApiError("API Omega retornou dados de clientes invalidos.", 502);
+      let fetchedCustomers: OmegaCustomer[] = [];
+      if (singleCustomer && response.status === 404) {
+        fetchedCustomers = [];
+      } else {
+        if (!response.ok) throw await omegaApiError(response, "API Omega recusou a consulta de clientes.");
+        const payload = await response.json();
+        const parsed = singleCustomer
+          ? omegaCustomerSchema.safeParse(payload)
+          : omegaCustomersResponseSchema.safeParse(payload);
+        if (!parsed.success) {
+          throw new OmegaApiError("API Omega retornou dados de clientes invalidos.", 502);
+        }
+        fetchedCustomers = singleCustomer
+          ? [parsed.data as OmegaCustomer]
+          : (parsed.data as { clientes: OmegaCustomer[] }).clientes;
       }
-      results.push(...(singleCustomer ? [parsed.data as OmegaCustomer] : (parsed.data as { clientes: OmegaCustomer[] }).clientes));
+      const fetchedByCode = new Map(fetchedCustomers.map((customer) => [customer.codigo, customer]));
+      const positiveExpiration = Date.now() + customerCacheTtlMs();
+      const negativeExpiration = Date.now() + Math.min(customerCacheTtlMs(), CUSTOMER_NOT_FOUND_TTL_MS);
+      for (const code of chunk) {
+        const customer = fetchedByCode.get(code) || null;
+        customerCache.delete(code);
+        customerCache.set(code, { value: customer, expiresAt: customer ? positiveExpiration : negativeExpiration });
+      }
     } catch (error) {
       if (error instanceof OmegaApiError) throw error;
       if (error instanceof Error && error.name === "AbortError") {
@@ -237,5 +282,8 @@ export async function getOmegaCustomers(customerCodes: number[]): Promise<OmegaC
       clearTimeout(timeout);
     }
   }
-  return results;
+  return codes.flatMap((code) => {
+    const entry = customerCache.get(code);
+    return entry?.value ? [entry.value] : [];
+  });
 }
