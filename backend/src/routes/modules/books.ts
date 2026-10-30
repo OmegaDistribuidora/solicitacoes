@@ -16,14 +16,16 @@ import type { AppUserRole } from "../../types";
 const PHOTO_TYPES = ["FRENTE_LOJA", "ACAO"] as const;
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png"]);
 const MAX_TOTAL_UPLOAD_SIZE = 150 * 1024 * 1024;
-const BOOK_MANAGER_ROLES = new Set<AppUserRole>(["ADMIN", "ANALYST", "MERCH_COORDINATOR"]);
-const BOOK_REVIEWER_ROLES = new Set<AppUserRole>(["ADMIN", "SUPERVISOR"]);
+const BOOK_MANAGER_ROLES = new Set<AppUserRole>(["ADMIN", "MERCH_COORDINATOR"]);
+const BOOK_DELETER_ROLES = new Set<AppUserRole>(["ADMIN", "MERCH_COORDINATOR"]);
+const SUPPLIER_CODES = new Set([117, 1630, 1968, 3609, 4698, 4701, 4750, 5569]);
+const SUPPLIER_NAMES = new Map<number, string>([[117, "bombril"], [1630, "panasonic"], [1968, "jde"], [3609, "mili"], [4698, "assim"], [4701, "albany"], [4750, "mat inset"], [5569, "gallo"]]);
+const ACTION_ONLY_SUPPLIER_CODES = new Set([117, 3609]);
 
 const bookSchema = z.object({
   nome: z.string().trim().min(1, "Informe o nome do book.").max(200),
-  codigoFornecedor: z.coerce.number().int().positive("Informe um codigo de fornecedor valido."),
-  mesAno: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Informe o periodo no formato mes/ano."),
-  capaMantidaId: z.coerce.number().int().positive().optional().nullable()
+  codigoFornecedor: z.coerce.number().int().refine((code) => SUPPLIER_CODES.has(code), "Selecione um fornecedor valido."),
+  mesAno: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Informe o periodo no formato mes/ano.")
 });
 
 const submissionSchema = z.object({
@@ -57,6 +59,19 @@ function publicOrigin(request: FastifyRequest): string {
   return `${request.protocol}://${forwardedHost}`;
 }
 
+function fixedCoverData(request: FastifyRequest, supplierCode: number) {
+  const relativePath = path.posix.join("book-templates", String(supplierCode), "capa-1.png");
+  return {
+    tipo: "CAPA",
+    nomeOriginal: `capa-${supplierCode}.png`,
+    nomeArquivo: "capa-1.png",
+    mimeType: "image/png",
+    tamanhoBytes: 0,
+    caminho: relativePath,
+    url: `${publicOrigin(request)}/${relativePath}`
+  };
+}
+
 function imageExtension(mimeType: string): string {
   return mimeType === "image/png" ? ".png" : ".jpg";
 }
@@ -70,6 +85,18 @@ function validImageSignature(mimeType: string, signature: Buffer): boolean {
 
 async function deleteFiles(paths: string[]): Promise<void> {
   await Promise.all(paths.map((filePath) => fs.unlink(filePath).catch(() => undefined)));
+}
+
+async function deleteBookDirectories(relativePaths: string[]): Promise<void> {
+  const booksRoot = path.resolve(env.attachmentsDir, "books");
+  const allowedPrefix = `${booksRoot}${path.sep}`;
+  const directories = new Set<string>();
+  for (const relativePath of relativePaths) {
+    const absolutePath = path.resolve(env.attachmentsDir, relativePath);
+    const directory = path.dirname(absolutePath);
+    if (absolutePath.startsWith(allowedPrefix) && directory.startsWith(allowedPrefix)) directories.add(directory);
+  }
+  await Promise.all([...directories].map((directory) => fs.rm(directory, { recursive: true, force: true }).catch(() => undefined)));
 }
 
 async function saveImage(request: FastifyRequest, part: any, targetDir: string, folder: string, type: PhotoType | "CAPA") {
@@ -147,7 +174,7 @@ const bookInclude = {
 };
 
 function isManager(role: AppUserRole): boolean { return BOOK_MANAGER_ROLES.has(role); }
-function isReviewer(role: AppUserRole): boolean { return BOOK_REVIEWER_ROLES.has(role); }
+function canDeleteBook(role: AppUserRole): boolean { return BOOK_DELETER_ROLES.has(role); }
 
 function requireBookManager(request: FastifyRequest, reply: FastifyReply): boolean {
   if (!request.authUser || !isManager(request.authUser.role)) {
@@ -158,7 +185,7 @@ function requireBookManager(request: FastifyRequest, reply: FastifyReply): boole
 }
 
 function effectiveStatus(workflow: { status: string } | null | undefined): string {
-  return workflow?.status || "ACTIVE";
+  return !workflow || workflow.status === "ACTIVE" ? "ACTIVE" : "CLOSED";
 }
 
 export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
@@ -176,8 +203,10 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
     const page = Math.max(1, Number(query.page || 1) || 1);
     const pageSize = Math.min(50, Math.max(1, Number(query.pageSize || 20) || 20));
     const numericQuery = Number(q);
+    const supplierCodes = [...SUPPLIER_NAMES].filter(([, name]) => name.includes(q.toLocaleLowerCase("pt-BR"))).map(([code]) => code);
+    if (Number.isInteger(numericQuery) && numericQuery > 0) supplierCodes.push(numericQuery);
     const searchWhere = q
-      ? { OR: [{ nome: { contains: q, mode: "insensitive" as const } }, { codigoFornecedor: Number.isInteger(numericQuery) ? numericQuery : -1 }, { periodo: { contains: q, mode: "insensitive" as const } }] }
+      ? { OR: [{ nome: { contains: q, mode: "insensitive" as const } }, { codigoFornecedor: { in: [...new Set(supplierCodes)] } }, { periodo: { contains: q, mode: "insensitive" as const } }] }
       : {};
     const where = authUser.role === "PROMOTER"
       ? { AND: [searchWhere, { OR: [{ workflow: { is: null } }, { workflow: { is: { status: "ACTIVE" as const } } }] }] }
@@ -196,7 +225,7 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
           _count: {
             select: authUser.role === "PROMOTER"
               ? { envios: { where: { promotorUserId: authUser.userId } } }
-              : { registros: true, anexos: true, envios: true }
+              : { registros: true, anexos: { where: { tipo: { not: "CAPA" } } }, envios: true }
           }
         }
       })
@@ -261,12 +290,12 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
           status,
           registros: book.registros.map((record) => ({
             ...record,
-            clienteNome: customersByCode.get(record.codigoCliente)?.nome || "Cliente nao encontrado",
+            clienteNome: customersByCode.get(record.codigoCliente)?.fantasia || customersByCode.get(record.codigoCliente)?.nome || "Cliente nao encontrado",
             clienteCidade: customersByCode.get(record.codigoCliente)?.cidade || "Cidade nao informada"
           })),
           envios: book.envios.map((submission) => ({
             ...submission,
-            clienteNome: customersByCode.get(submission.codigoCliente)?.nome || "Cliente nao encontrado",
+            clienteNome: customersByCode.get(submission.codigoCliente)?.fantasia || customersByCode.get(submission.codigoCliente)?.nome || "Cliente nao encontrado",
             clienteCidade: customersByCode.get(submission.codigoCliente)?.cidade || "Cidade nao informada"
           }))
         }
@@ -280,29 +309,17 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/modules/promotores/books", async (request, reply) => {
     if (!requireBookManager(request, reply)) return;
     const authUser = request.authUser!;
-    let upload: Awaited<ReturnType<typeof parseMultipart<z.infer<typeof bookSchema>>>> | undefined;
-    try {
-      upload = await parseMultipart(request, bookSchema, (field) => field === "capa" ? "CAPA" : null);
-      if (upload.images.length !== 1) throw new Error("Envie exatamente uma imagem de capa.");
-    } catch (error) {
-      if (upload) await fs.rm(upload.targetDir, { recursive: true, force: true }).catch(() => undefined);
-      return reply.code(400).send({ message: error instanceof Error ? error.message : "Nao foi possivel ler o book." });
-    }
-    try {
-      const period = periodValues(upload.data.mesAno);
-      const created = await prisma.$transaction(async (tx) => {
-        const book = await tx.book.create({ data: { nome: upload!.data.nome, codigoFornecedor: upload!.data.codigoFornecedor, periodo: period.label, dataPeriodo: period.firstDay, criadoPorId: authUser.userId, atualizadoPorId: authUser.userId } });
-        await tx.bookWorkflow.create({ data: { bookId: book.id, status: "ACTIVE" } });
-        const cover = upload!.images[0];
-        await tx.anexoBook.create({ data: { bookId: book.id, tipo: "CAPA", nomeOriginal: cover.originalName, nomeArquivo: cover.fileName, mimeType: cover.mimeType, tamanhoBytes: cover.size, caminho: cover.relativePath, url: cover.url } });
-        await recordAudit({ actor: authUser, action: "CREATE_BOOK", entityType: "BOOK", entityId: book.id, summary: `Book ${book.id} criado: ${book.nome}.`, after: { nome: book.nome, codigoFornecedor: book.codigoFornecedor, periodo: book.periodo, status: "ACTIVE" } }, tx);
-        return tx.book.findUniqueOrThrow({ where: { id: book.id }, include: bookInclude });
-      });
-      return reply.code(201).send({ book: { ...created, status: "ACTIVE", envios: [] } });
-    } catch (error) {
-      await fs.rm(upload.targetDir, { recursive: true, force: true }).catch(() => undefined);
-      throw error;
-    }
+    const parsed = bookSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ message: parsed.error.issues[0]?.message || "Dados do book invalidos." });
+    const period = periodValues(parsed.data.mesAno);
+    const created = await prisma.$transaction(async (tx) => {
+      const book = await tx.book.create({ data: { nome: parsed.data.nome, codigoFornecedor: parsed.data.codigoFornecedor, periodo: period.label, dataPeriodo: period.firstDay, criadoPorId: authUser.userId, atualizadoPorId: authUser.userId } });
+      await tx.bookWorkflow.create({ data: { bookId: book.id, status: "ACTIVE" } });
+      await tx.anexoBook.create({ data: { bookId: book.id, ...fixedCoverData(request, parsed.data.codigoFornecedor) } });
+      await recordAudit({ actor: authUser, action: "CREATE_BOOK", entityType: "BOOK", entityId: book.id, summary: `Book ${book.id} criado: ${book.nome}.`, after: { nome: book.nome, codigoFornecedor: book.codigoFornecedor, periodo: book.periodo, status: "ACTIVE" } }, tx);
+      return tx.book.findUniqueOrThrow({ where: { id: book.id }, include: bookInclude });
+    });
+    return reply.code(201).send({ book: { ...created, status: "ACTIVE", envios: [] } });
   });
 
   app.put("/api/modules/promotores/books/:id", async (request, reply) => {
@@ -310,32 +327,20 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
     const authUser = request.authUser!;
     const id = Number((request.params as { id: string }).id);
     if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ message: "Book invalido." });
-    const existing = await prisma.book.findUnique({ where: { id }, include: { anexos: true, workflow: true } });
+    const existing = await prisma.book.findUnique({ where: { id }, include: { workflow: true, anexos: { where: { tipo: "CAPA" } } } });
     if (!existing) return reply.code(404).send({ message: "Book nao encontrado." });
     if (effectiveStatus(existing.workflow) !== "ACTIVE") return reply.code(409).send({ message: "Reabra o book antes de editar seus dados." });
-    let upload: Awaited<ReturnType<typeof parseMultipart<z.infer<typeof bookSchema>>>> | undefined;
-    try {
-      upload = await parseMultipart(request, bookSchema, (field) => field === "capa" ? "CAPA" : null);
-      const oldCover = existing.anexos.find((item) => item.tipo === "CAPA");
-      if (upload.images.length > 1) throw new Error("Envie somente uma imagem de capa.");
-      if (!upload.images.length && upload.data.capaMantidaId !== oldCover?.id) throw new Error("Mantenha a capa atual ou envie uma nova capa.");
-    } catch (error) {
-      if (upload) await fs.rm(upload.targetDir, { recursive: true, force: true }).catch(() => undefined);
-      return reply.code(400).send({ message: error instanceof Error ? error.message : "Nao foi possivel ler o book." });
-    }
-    const oldCover = existing.anexos.find((item) => item.tipo === "CAPA");
-    const period = periodValues(upload.data.mesAno);
+    const parsed = bookSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ message: parsed.error.issues[0]?.message || "Dados do book invalidos." });
+    const period = periodValues(parsed.data.mesAno);
     const updated = await prisma.$transaction(async (tx) => {
-      await tx.book.update({ where: { id }, data: { nome: upload!.data.nome, codigoFornecedor: upload!.data.codigoFornecedor, periodo: period.label, dataPeriodo: period.firstDay, atualizadoPorId: authUser.userId } });
-      if (upload!.images.length) {
-        await tx.anexoBook.deleteMany({ where: { bookId: id, tipo: "CAPA" } });
-        const cover = upload!.images[0];
-        await tx.anexoBook.create({ data: { bookId: id, tipo: "CAPA", nomeOriginal: cover.originalName, nomeArquivo: cover.fileName, mimeType: cover.mimeType, tamanhoBytes: cover.size, caminho: cover.relativePath, url: cover.url } });
-      }
-      await recordAudit({ actor: authUser, action: "UPDATE_BOOK", entityType: "BOOK", entityId: id, summary: `Book ${id} atualizado: ${upload!.data.nome}.`, before: { nome: existing.nome, codigoFornecedor: existing.codigoFornecedor, periodo: existing.periodo }, after: { nome: upload!.data.nome, codigoFornecedor: upload!.data.codigoFornecedor, periodo: period.label } }, tx);
+      await tx.book.update({ where: { id }, data: { nome: parsed.data.nome, codigoFornecedor: parsed.data.codigoFornecedor, periodo: period.label, dataPeriodo: period.firstDay, atualizadoPorId: authUser.userId } });
+      await tx.anexoBook.deleteMany({ where: { bookId: id, tipo: "CAPA" } });
+      await tx.anexoBook.create({ data: { bookId: id, ...fixedCoverData(request, parsed.data.codigoFornecedor) } });
+      await recordAudit({ actor: authUser, action: "UPDATE_BOOK", entityType: "BOOK", entityId: id, summary: `Book ${id} atualizado: ${parsed.data.nome}.`, before: { nome: existing.nome, codigoFornecedor: existing.codigoFornecedor, periodo: existing.periodo }, after: { nome: parsed.data.nome, codigoFornecedor: parsed.data.codigoFornecedor, periodo: period.label } }, tx);
       return tx.book.findUniqueOrThrow({ where: { id }, include: bookInclude });
     });
-    if (upload.images.length && oldCover) await deleteFiles([path.join(env.attachmentsDir, oldCover.caminho)]);
+    await deleteBookDirectories(existing.anexos.map((cover) => cover.caminho));
     return { book: { ...updated, status: effectiveStatus(updated.workflow), envios: [] } };
   });
 
@@ -354,6 +359,9 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
         return match ? match[1] as PhotoType : null;
       });
       if (!upload.images.length) throw new Error("Adicione pelo menos uma foto ao registro.");
+      if (ACTION_ONLY_SUPPLIER_CODES.has(book.codigoFornecedor) && upload.images.some((image) => image.type === "FRENTE_LOJA")) {
+        throw new Error("Este fornecedor aceita somente fotos de acao.");
+      }
     } catch (error) {
       if (upload) await fs.rm(upload.targetDir, { recursive: true, force: true }).catch(() => undefined);
       return reply.code(400).send({ message: error instanceof Error ? error.message : "Nao foi possivel ler o registro." });
@@ -425,6 +433,9 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
     }
     const selectedAttachments = submission.anexos.filter((attachment) => selectedAttachmentIds.includes(attachment.id));
     const discardedAttachments = submission.anexos.filter((attachment) => !selectedAttachmentIds.includes(attachment.id));
+    if (ACTION_ONLY_SUPPLIER_CODES.has(submission.book.codigoFornecedor) && selectedAttachments.some((attachment) => attachment.tipo === "FRENTE_LOJA")) {
+      return reply.code(400).send({ message: "Este fornecedor aceita somente fotos de acao." });
+    }
     let recordId: number | null = null;
     await prisma.$transaction(async (tx) => {
       const claimed = await tx.bookSubmission.updateMany({
@@ -465,33 +476,30 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/api/modules/promotores/books/:id/status", async (request, reply) => {
     const authUser = request.authUser!;
     const bookId = Number((request.params as { id: string }).id);
-    const parsed = z.object({ status: z.enum(["ACTIVE", "CLOSED", "APPROVED", "REJECTED"]), motivo: z.string().trim().max(500).optional() }).safeParse(request.body);
+    const parsed = z.object({ status: z.enum(["ACTIVE", "CLOSED"]) }).safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ message: "Status invalido." });
     const book = await prisma.book.findUnique({ where: { id: bookId }, include: { workflow: true, _count: { select: { registros: true } } } });
     if (!book) return reply.code(404).send({ message: "Book nao encontrado." });
     const currentStatus = effectiveStatus(book.workflow);
-    const managerChange = parsed.data.status === "ACTIVE" || parsed.data.status === "CLOSED";
-    if (managerChange && !isManager(authUser.role)) return reply.code(403).send({ message: "Apenas o coordenador pode abrir ou encerrar books." });
-    if (!managerChange && !isReviewer(authUser.role)) return reply.code(403).send({ message: "Apenas o supervisor pode aprovar ou recusar books." });
+    if (!isManager(authUser.role)) return reply.code(403).send({ message: "Apenas o coordenador pode abrir ou encerrar books." });
     if (parsed.data.status === "CLOSED") {
       const pending = await prisma.bookSubmission.count({ where: { bookId, status: "PENDING" } });
       if (pending) return reply.code(409).send({ message: "Revise todos os envios pendentes antes de encerrar o book." });
       if (!book._count.registros) return reply.code(409).send({ message: "O book precisa ter pelo menos um registro aceito antes de ser encerrado." });
     }
-    if ((parsed.data.status === "APPROVED" || parsed.data.status === "REJECTED") && currentStatus !== "CLOSED") return reply.code(409).send({ message: "Somente books encerrados podem ser aprovados ou recusados." });
     const now = new Date();
     await prisma.bookWorkflow.upsert({
       where: { bookId },
-      create: { bookId, status: parsed.data.status, encerradoPorId: parsed.data.status === "CLOSED" ? authUser.userId : null, encerradoEm: parsed.data.status === "CLOSED" ? now : null, revisadoPorId: !managerChange ? authUser.userId : null, revisadoEm: !managerChange ? now : null, motivoRevisao: parsed.data.motivo || null },
-      update: { status: parsed.data.status, ...(parsed.data.status === "ACTIVE" ? { encerradoPorId: null, encerradoEm: null, revisadoPorId: null, revisadoEm: null, motivoRevisao: null } : {}), ...(parsed.data.status === "CLOSED" ? { encerradoPorId: authUser.userId, encerradoEm: now, revisadoPorId: null, revisadoEm: null, motivoRevisao: null } : {}), ...(!managerChange ? { revisadoPorId: authUser.userId, revisadoEm: now, motivoRevisao: parsed.data.motivo || null } : {}) }
+      create: { bookId, status: parsed.data.status, encerradoPorId: parsed.data.status === "CLOSED" ? authUser.userId : null, encerradoEm: parsed.data.status === "CLOSED" ? now : null },
+      update: { status: parsed.data.status, ...(parsed.data.status === "ACTIVE" ? { encerradoPorId: null, encerradoEm: null, revisadoPorId: null, revisadoEm: null, motivoRevisao: null } : { encerradoPorId: authUser.userId, encerradoEm: now, revisadoPorId: null, revisadoEm: null, motivoRevisao: null }) }
     });
-    await recordAudit({ actor: authUser, action: `BOOK_${parsed.data.status}`, entityType: "BOOK", entityId: bookId, summary: `Book ${bookId} alterado de ${currentStatus} para ${parsed.data.status}.`, before: { status: currentStatus }, after: { status: parsed.data.status, motivo: parsed.data.motivo || null } });
+    await recordAudit({ actor: authUser, action: `BOOK_${parsed.data.status}`, entityType: "BOOK", entityId: bookId, summary: `Book ${bookId} alterado de ${currentStatus} para ${parsed.data.status}.`, before: { status: currentStatus }, after: { status: parsed.data.status } });
     return { ok: true, status: parsed.data.status };
   });
 
   app.delete("/api/modules/promotores/books/:id", async (request, reply) => {
-    if (!requireBookManager(request, reply)) return;
     const authUser = request.authUser!;
+    if (!canDeleteBook(authUser.role)) return reply.code(403).send({ message: "Apenas o administrador ou coordenador de merchandising pode excluir books." });
     const id = Number((request.params as { id: string }).id);
     if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ message: "Book invalido." });
     const existing = await prisma.book.findUnique({ where: { id }, include: { anexos: true, envios: { include: { anexos: true } } } });
@@ -501,7 +509,7 @@ export async function registerBookRoutes(app: FastifyInstance): Promise<void> {
       await recordAudit({ actor: authUser, action: "DELETE_BOOK", entityType: "BOOK", entityId: id, summary: `Book ${id} excluido: ${existing.nome}.`, before: { nome: existing.nome, codigoFornecedor: existing.codigoFornecedor, periodo: existing.periodo } }, tx);
     });
     const paths = new Set([...existing.anexos.map((item) => item.caminho), ...existing.envios.flatMap((item) => item.anexos.map((attachment) => attachment.caminho))]);
-    await deleteFiles([...paths].map((item) => path.join(env.attachmentsDir, item)));
+    await deleteBookDirectories([...paths]);
     return reply.code(204).send();
   });
 }

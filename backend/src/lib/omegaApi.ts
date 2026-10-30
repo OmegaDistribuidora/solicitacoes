@@ -57,6 +57,7 @@ const promoterMutationResponseSchema = z.object({
 const omegaCustomerSchema = z.object({
   codigo: z.number().int().positive(),
   nome: z.string(),
+  fantasia: z.string().nullable().optional(),
   cidade: z.string()
 });
 
@@ -67,6 +68,7 @@ const omegaCustomersResponseSchema = z.object({
 export type OmegaCustomer = {
   codigo: number;
   nome: string;
+  fantasia?: string | null;
   cidade: string;
 };
 

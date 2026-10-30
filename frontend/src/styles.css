@@ -1553,6 +1553,37 @@ body:has(.modal-backdrop) {
   gap: 12px;
 }
 
+.photo-upload-grid.single-upload {
+  grid-template-columns: 1fr;
+}
+
+.supplier-cover-preview {
+  min-height: 116px;
+  display: grid;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(190px, 1.3fr);
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  color: var(--muted);
+  background: #f6f8fc;
+}
+
+.supplier-cover-preview span,
+.supplier-cover-preview strong {
+  color: var(--navy-900);
+  font-weight: 800;
+}
+
+.supplier-cover-preview img {
+  width: 100%;
+  height: 105px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #fff;
+}
+
 .customer-code-row {
   display: grid;
   grid-template-columns: minmax(220px, 0.7fr) minmax(280px, 1.3fr);

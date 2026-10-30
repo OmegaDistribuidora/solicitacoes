@@ -11,7 +11,7 @@ export default function PromotoresPage() {
   const tab = booksOnly || searchParams.get("aba") === "books" ? "books" : "rota";
   const routePageRef = useRef(null);
   const booksPageRef = useRef(null);
-  const canCreateBook = ["ADMIN", "ANALYST", "MERCH_COORDINATOR"].includes(user?.role);
+  const canCreateBook = ["ADMIN", "MERCH_COORDINATOR"].includes(user?.role);
 
   return (
     <div className="page-stack">
