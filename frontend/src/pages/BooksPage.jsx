@@ -203,7 +203,9 @@ async function exportBookPdf(book) {
       context.clearRect(0, 0, canvas.width, canvas.height);
       context.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
       const left = 76;
-      const top = 248;
+      const isBombril = supplier.code === 117;
+      const top = isBombril ? 342 : 248;
+      const bottomReserve = isBombril ? 300 : 225;
       const gap = 18;
       const cardWidth = (canvas.width - left * 2 - gap * 3) / 4;
       pageItems.forEach((item, index) => {
@@ -221,7 +223,7 @@ async function exportBookPdf(book) {
         fitText(context, String(record.promotor || ""), cardWidth - 28, 20, 700);
         context.fillText(`PROMOTOR: ${String(record.promotor || "").toUpperCase()}`, x + cardWidth / 2, top + 105);
         context.textAlign = "left";
-        drawImageCard(context, images[index], x, top + 145, cardWidth, canvas.height - top - 225);
+        drawImageCard(context, images[index], x, top + 145, cardWidth, canvas.height - top - bottomReserve);
       });
       commitPage();
     }
